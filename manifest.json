@@ -1,0 +1,68 @@
+{
+  "name": "FinTrack — Personal Finance Manager",
+  "short_name": "FinTrack",
+  "description": "Локальный менеджер личных финансов с бюджетами, целями, долгами и аналитикой.",
+  "id": "./",
+  "start_url": "./#/dashboard",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6f3",
+  "theme_color": "#256a4a",
+  "orientation": "portrait-primary",
+  "lang": "ru",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "./assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "./assets/icons/maskable-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./assets/icons/maskable-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "./assets/screenshots/mobile.png",
+      "sizes": "390x813",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "FinTrack dashboard on iPhone"
+    },
+    {
+      "src": "./assets/screenshots/desktop.png",
+      "sizes": "1440x891",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "FinTrack desktop dashboard"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Добавить операцию",
+      "short_name": "Добавить",
+      "url": "./#/transaction/new",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Аналитика",
+      "short_name": "Аналитика",
+      "url": "./#/analytics",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

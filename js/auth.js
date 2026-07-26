@@ -1,3 +1,5 @@
+import { passwordChecks, passwordStrength } from "./password.js";
+
 let client = null;
 let currentSession = null;
 let localMode = false;
@@ -47,11 +49,127 @@ function renderShell(content, title, subtitle) {
   return screen;
 }
 
+function passwordField({
+  label = "Пароль",
+  name = "password",
+  autocomplete = "new-password",
+  placeholder = "Введите пароль",
+  strong = false,
+}) {
+  return `
+    <label>
+      <span>${label}</span>
+      <span class="password-input-wrap">
+        <input
+          name="${name}"
+          type="password"
+          autocomplete="${autocomplete}"
+          ${strong ? 'minlength="12" maxlength="72"' : ""}
+          required
+          placeholder="${placeholder}"
+        >
+        <button class="password-toggle" type="button" data-password-toggle aria-label="Показать пароль">Показать</button>
+      </span>
+    </label>`;
+}
+
+function passwordGuidance() {
+  return `
+    <div class="password-strength" data-password-strength="0" aria-live="polite">
+      <div class="password-strength-head">
+        <span>Надёжность</span>
+        <strong id="password-strength-label">Введите пароль</strong>
+      </div>
+      <div class="password-strength-track" aria-hidden="true"><span id="password-strength-bar"></span></div>
+      <ul class="password-rules">
+        <li data-password-rule="length">От 12 до 72 символов</li>
+        <li data-password-rule="personal">Без имени и части email</li>
+        <li data-password-rule="common">Без частых слов и простых последовательностей</li>
+        <li data-password-rule="strength">Надёжность не ниже «Хорошая»</li>
+      </ul>
+    </div>`;
+}
+
+function bindPasswordToggles(screen) {
+  screen.querySelectorAll("[data-password-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = button.parentElement.querySelector("input");
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      button.textContent = visible ? "Показать" : "Скрыть";
+      button.setAttribute("aria-label", visible ? "Показать пароль" : "Скрыть пароль");
+      input.focus();
+    });
+  });
+}
+
+function updatePasswordGuidance(form) {
+  const password = String(form.elements.password?.value || "");
+  const identity = {
+    name: String(form.elements.name?.value || currentSession?.user?.user_metadata?.full_name || ""),
+    email: String(form.elements.email?.value || currentSession?.user?.email || ""),
+  };
+  const checks = passwordChecks(password, identity);
+  const strength = passwordStrength(password);
+  const root = form.querySelector("[data-password-strength]");
+  if (root) root.dataset.passwordStrength = String(strength.score);
+  const label = form.querySelector("#password-strength-label");
+  if (label) label.textContent = password ? strength.label : "Введите пароль";
+  const bar = form.querySelector("#password-strength-bar");
+  if (bar) bar.style.width = password ? `${Math.max(12, strength.score * 25)}%` : "0";
+  checks.forEach((check) => {
+    const item = form.querySelector(`[data-password-rule="${check.id}"]`);
+    if (item) item.dataset.passed = String(check.passed);
+  });
+  return { checks, strength };
+}
+
+function bindPasswordGuidance(form) {
+  ["password", "passwordConfirm", "name", "email"].forEach((name) => {
+    form.elements[name]?.addEventListener("input", () => updatePasswordGuidance(form));
+  });
+  updatePasswordGuidance(form);
+}
+
+function validateNewPassword(form) {
+  const password = String(form.elements.password.value);
+  const confirmation = String(form.elements.passwordConfirm.value);
+  const { checks, strength } = updatePasswordGuidance(form);
+  if (checks.some((check) => !check.passed) || strength.score < 3) {
+    setMessage("Придумайте более надёжный пароль и выполните отмеченные требования.", "error");
+    form.elements.password.focus();
+    return null;
+  }
+  if (password !== confirmation) {
+    setMessage("Пароли не совпадают. Введите их ещё раз.", "error");
+    form.elements.passwordConfirm.focus();
+    return null;
+  }
+  return password;
+}
+
+function friendlyAuthError(error, fallback) {
+  const message = String(error?.message || "").toLowerCase();
+  if (message.includes("already registered") || message.includes("already exists")) {
+    return "Аккаунт с таким email уже существует. Попробуйте войти.";
+  }
+  if (message.includes("password") && (message.includes("weak") || message.includes("least"))) {
+    return "Сервис отклонил пароль как слишком простой. Придумайте более длинный и уникальный вариант.";
+  }
+  if (message.includes("email") && message.includes("invalid")) {
+    return "Проверьте правильность адреса email.";
+  }
+  return fallback;
+}
+
 function renderLogin(message = "") {
   const screen = renderShell(`
     <form id="auth-form" class="auth-form">
       <label><span>Email</span><input name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>
-      <label><span>Пароль</span><input name="password" type="password" autocomplete="current-password" minlength="8" required placeholder="Минимум 8 символов"></label>
+      ${passwordField({
+        autocomplete: "current-password",
+        placeholder: "Ваш пароль",
+      })}
       <button class="button button-primary" type="submit">Войти</button>
     </form>
     <div class="auth-links">
@@ -61,6 +179,7 @@ function renderLogin(message = "") {
   "Вход по email",
   "Ваши данные синхронизируются только после входа.");
   bindViewLinks(screen);
+  bindPasswordToggles(screen);
   const form = screen.querySelector("#auth-form");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -86,23 +205,37 @@ function renderRegister() {
     <form id="auth-form" class="auth-form">
       <label><span>Имя</span><input name="name" type="text" autocomplete="name" maxlength="80" required placeholder="Как к вам обращаться"></label>
       <label><span>Email</span><input name="email" type="email" autocomplete="email" required placeholder="name@example.com"></label>
-      <label><span>Пароль</span><input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="Минимум 8 символов"></label>
+      ${passwordField({
+        placeholder: "Не менее 12 символов",
+        strong: true,
+      })}
+      ${passwordField({
+        label: "Повторите пароль",
+        name: "passwordConfirm",
+        placeholder: "Введите пароль ещё раз",
+        strong: true,
+      })}
+      ${passwordGuidance()}
       <button class="button button-primary" type="submit">Зарегистрироваться</button>
     </form>
     <div class="auth-links"><button type="button" data-auth-view="login">Уже есть аккаунт? Войти</button></div>`,
   "Создание аккаунта",
   "Используйте личный email — на него придёт подтверждение.");
   bindViewLinks(screen);
+  bindPasswordToggles(screen);
   const form = screen.querySelector("#auth-form");
+  bindPasswordGuidance(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    setBusy(form, true);
     setMessage("");
+    const password = validateNewPassword(form);
+    if (!password) return;
+    setBusy(form, true);
     const data = new FormData(form);
     const email = String(data.get("email")).trim();
     const { data: result, error } = await client.auth.signUp({
       email,
-      password: String(data.get("password")),
+      password,
       options: {
         data: { full_name: String(data.get("name")).trim() },
         emailRedirectTo: `${location.origin}${location.pathname}`,
@@ -110,7 +243,7 @@ function renderRegister() {
     });
     setBusy(form, false);
     if (error) {
-      setMessage(error.message || "Не удалось создать аккаунт.", "error");
+      setMessage(friendlyAuthError(error, "Не удалось создать аккаунт. Попробуйте ещё раз."), "error");
       return;
     }
     if (result.session) {
@@ -150,20 +283,35 @@ function renderForgot() {
 function renderPasswordUpdate() {
   const screen = renderShell(`
     <form id="auth-form" class="auth-form">
-      <label><span>Новый пароль</span><input name="password" type="password" autocomplete="new-password" minlength="8" required placeholder="Минимум 8 символов"></label>
+      ${passwordField({
+        label: "Новый пароль",
+        placeholder: "Не менее 12 символов",
+        strong: true,
+      })}
+      ${passwordField({
+        label: "Повторите новый пароль",
+        name: "passwordConfirm",
+        placeholder: "Введите пароль ещё раз",
+        strong: true,
+      })}
+      ${passwordGuidance()}
       <button class="button button-primary" type="submit">Сохранить пароль</button>
     </form>`,
   "Новый пароль",
   "Придумайте пароль, который не используете в других сервисах.");
+  bindPasswordToggles(screen);
   const form = screen.querySelector("#auth-form");
+  bindPasswordGuidance(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    setMessage("");
+    const password = validateNewPassword(form);
+    if (!password) return;
     setBusy(form, true);
-    const password = String(new FormData(form).get("password"));
     const { error } = await client.auth.updateUser({ password });
     setBusy(form, false);
     if (error) {
-      setMessage(error.message || "Не удалось изменить пароль.", "error");
+      setMessage(friendlyAuthError(error, "Не удалось изменить пароль."), "error");
       return;
     }
     history.replaceState({}, document.title, location.pathname);

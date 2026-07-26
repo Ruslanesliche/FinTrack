@@ -1,4 +1,5 @@
 import { passwordChecks, passwordStrength } from "./password.js";
+import { friendlyAuthError, normalizeEmail } from "./email.js";
 
 let client = null;
 let currentSession = null;
@@ -132,6 +133,15 @@ function bindPasswordGuidance(form) {
   updatePasswordGuidance(form);
 }
 
+function bindEmailNormalization(form) {
+  const input = form.elements.email;
+  if (!input) return;
+  input.addEventListener("input", () => {
+    const normalized = normalizeEmail(input.value);
+    if (normalized !== input.value) input.value = normalized;
+  });
+}
+
 function validateNewPassword(form) {
   const password = String(form.elements.password.value);
   const confirmation = String(form.elements.passwordConfirm.value);
@@ -147,20 +157,6 @@ function validateNewPassword(form) {
     return null;
   }
   return password;
-}
-
-function friendlyAuthError(error, fallback) {
-  const message = String(error?.message || "").toLowerCase();
-  if (message.includes("already registered") || message.includes("already exists")) {
-    return "Аккаунт с таким email уже существует. Попробуйте войти.";
-  }
-  if (message.includes("password") && (message.includes("weak") || message.includes("least"))) {
-    return "Сервис отклонил пароль как слишком простой. Придумайте более длинный и уникальный вариант.";
-  }
-  if (message.includes("email") && message.includes("invalid")) {
-    return "Проверьте правильность адреса email.";
-  }
-  return fallback;
 }
 
 function renderLogin(message = "") {
@@ -182,13 +178,14 @@ function renderLogin(message = "") {
   bindViewLinks(screen);
   bindPasswordToggles(screen);
   const form = screen.querySelector("#auth-form");
+  bindEmailNormalization(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     setBusy(form, true);
     setMessage("");
     const data = new FormData(form);
     const { error } = await client.auth.signInWithPassword({
-      email: String(data.get("email")).trim(),
+      email: normalizeEmail(data.get("email")),
       password: String(data.get("password")),
     });
     if (error) {
@@ -226,6 +223,7 @@ function renderRegister() {
   bindViewLinks(screen);
   bindPasswordToggles(screen);
   const form = screen.querySelector("#auth-form");
+  bindEmailNormalization(form);
   bindPasswordGuidance(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -234,7 +232,7 @@ function renderRegister() {
     if (!password) return;
     setBusy(form, true);
     const data = new FormData(form);
-    const email = String(data.get("email")).trim();
+    const email = normalizeEmail(data.get("email"));
     const { data: result, error } = await client.auth.signUp({
       email,
       password,
@@ -267,10 +265,11 @@ function renderForgot() {
   "Пришлём безопасную ссылку для создания нового пароля.");
   bindViewLinks(screen);
   const form = screen.querySelector("#auth-form");
+  bindEmailNormalization(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     setBusy(form, true);
-    const email = String(new FormData(form).get("email")).trim();
+    const email = normalizeEmail(new FormData(form).get("email"));
     const { error } = await client.auth.resetPasswordForEmail(email, {
       redirectTo: `${location.origin}${location.pathname}`,
     });

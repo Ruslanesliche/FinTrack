@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f4f7f4">
+    <meta name="description" content="FinTrack — локальный менеджер личных финансов с бюджетами, целями, долгами и аналитикой.">
+    <meta name="author" content="Ruslan Toxeitov">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="FinTrack">
+    <meta property="og:title" content="FinTrack — Personal Finance Manager">
+    <meta property="og:description" content="Личный финансовый менеджер, который хранит данные только на вашем устройстве.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="./assets/screenshots/social-preview.png">
+    <title>FinTrack — Personal Finance Manager</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" href="./assets/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="./css/variables.css">
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/components.css">
+    <link rel="stylesheet" href="./css/mobile.css">
+    <link rel="stylesheet" href="./css/animations.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+    <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#app-view">Перейти к содержимому</a>
+    <div class="app-shell">
+      <aside class="desktop-sidebar" aria-label="Основная навигация">
+        <a class="brand" href="#/dashboard" aria-label="FinTrack — главная">
+          <span class="brand-mark">F</span>
+          <span><strong>FinTrack</strong><small>Personal Finance Manager</small></span>
+        </a>
+        <nav id="desktop-nav" class="side-nav"></nav>
+        <div class="sidebar-note">
+          <span class="privacy-dot"></span>
+          <div><strong>Только на устройстве</strong><small>Ваши данные никуда не отправляются</small></div>
+        </div>
+      </aside>
+
+      <div class="app-column">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="page-eyebrow">Обзор финансов</p>
+            <h1 id="page-title">Главная</h1>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" id="global-search-button" type="button" aria-label="Глобальный поиск">
+              <i data-lucide="search"></i>
+            </button>
+            <button class="avatar-button" id="profile-button" type="button" aria-label="Открыть настройки">Р</button>
+          </div>
+        </header>
+
+        <main id="app-view" class="app-view" tabindex="-1" aria-live="polite">
+          <div class="skeleton-grid" aria-label="Загрузка">
+            <div class="skeleton skeleton-hero"></div>
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+          </div>
+        </main>
+
+        <nav class="mobile-nav" id="mobile-nav" aria-label="Нижняя навигация">
+          <a href="#/dashboard" data-route="dashboard"><i data-lucide="house"></i><span>Главная</span></a>
+          <a href="#/transactions" data-route="transactions"><i data-lucide="list-filter"></i><span>Операции</span></a>
+          <a class="nav-add" href="#/transaction/new" data-route="transaction"><i data-lucide="plus"></i><span class="sr-only">Добавить</span></a>
+          <a href="#/analytics" data-route="analytics"><i data-lucide="chart-no-axes-combined"></i><span>Аналитика</span></a>
+          <a href="#/more" data-route="more"><i data-lucide="layout-grid"></i><span>Еще</span></a>
+        </nav>
+      </div>
+    </div>
+
+    <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
+
+    <div id="modal-root" class="modal-root" hidden>
+      <div class="modal-backdrop" data-close-modal></div>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <header class="modal-header">
+          <div>
+            <p class="eyebrow" id="modal-eyebrow">FinTrack</p>
+            <h2 id="modal-title">Окно</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-modal aria-label="Закрыть"><i data-lucide="x"></i></button>
+        </header>
+        <div id="modal-content" class="modal-content"></div>
+      </section>
+    </div>
+
+    <div id="onboarding" class="onboarding" hidden>
+      <div class="onboarding-panel" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+        <div class="onboarding-top">
+          <a class="brand onboarding-brand" href="#/dashboard">
+            <span class="brand-mark">F</span><strong>FinTrack</strong>
+          </a>
+          <button class="text-button" id="skip-onboarding" type="button">Пропустить</button>
+        </div>
+        <div class="onboarding-progress" aria-hidden="true"><span id="onboarding-progress"></span></div>
+        <div id="onboarding-content"></div>
+        <div class="onboarding-actions">
+          <button class="button button-secondary" id="onboarding-back" type="button">Назад</button>
+          <button class="button button-primary" id="onboarding-next" type="button">Продолжить</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>

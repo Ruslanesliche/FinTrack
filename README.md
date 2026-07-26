@@ -38,7 +38,7 @@ Add your GitHub Pages URL here
 - Global search across transactions, categories, accounts, debts, goals, notes, and tags.
 - Light, dark, and system themes; three restrained accent palettes; persistent privacy controls.
 - JSON backup and restore, automatic pre-import local backup, and Excel-compatible UTF-8 CSV export.
-- Email/password registration, email confirmation, password recovery, and per-user cloud synchronization.
+- Email/password registration, confirmation fields, password visibility controls, live strength guidance, email confirmation, password recovery, and per-user cloud synchronization.
 - Automatic migration of existing local data to the cloud after the first authenticated launch.
 - Installable PWA with offline app shell and iPhone safe-area support.
 
@@ -214,6 +214,8 @@ SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
 ```
 
 The publishable key is intentionally available to the browser. Never configure or expose a Supabase secret key or `service_role` key in FinTrack. For production email delivery, configure custom SMTP in Supabase instead of relying on the limited default sender.
+
+FinTrack requires new passwords to be 12–72 characters, rejects personal information and common patterns, and requires a good strength score. Configure the same minimum length and character policy in Supabase Auth settings so the identity provider enforces the rule independently of the browser.
 
 ## Export and import
 

@@ -1,6 +1,6 @@
 {
   "name": "fintrack",
-  "version": "1.2.1",
+  "version": "1.2.4",
   "private": true,
   "type": "module",
   "description": "Offline-first personal finance PWA with email authentication and cloud sync.",

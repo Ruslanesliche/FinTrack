@@ -11,7 +11,7 @@
 
 FinTrack is a mobile-first personal finance manager for recording income and expenses, organizing accounts and categories, creating budgets, tracking financial goals and debts, and understanding spending through responsive analytics.
 
-It is a client-side Progressive Web App written with semantic HTML, modern CSS, and Vanilla JavaScript ES Modules. No account, backend, build step, paid API, or bank connection is required.
+It is an offline-first Progressive Web App written with semantic HTML, modern CSS, and Vanilla JavaScript ES Modules. The Sites deployment adds an authenticated Cloudflare Worker API and D1-backed cloud synchronization while keeping local data available without a connection.
 
 ## Screenshots
 
@@ -38,6 +38,8 @@ Add your GitHub Pages URL here
 - Global search across transactions, categories, accounts, debts, goals, notes, and tags.
 - Light, dark, and system themes; three restrained accent palettes; persistent privacy controls.
 - JSON backup and restore, automatic pre-import local backup, and Excel-compatible UTF-8 CSV export.
+- Authenticated, per-user cloud synchronization with optimistic conflict detection.
+- Automatic migration of existing local data to the cloud after the first authenticated launch.
 - Installable PWA with offline app shell and iPhone safe-area support.
 
 ## Mobile-first design
@@ -50,7 +52,7 @@ The layout scales from iPhone SE through large iPhone models and expands to a si
 
 The Web App Manifest defines standalone display, portrait orientation, app icons, maskable icons, shortcuts, and mobile/desktop screenshots. The Service Worker caches the app shell, removes old cache versions, stores fetched Chart.js and Lucide resources after the first load, and falls back to the cached application or `offline.html`.
 
-Financial data remains usable offline after the first successful online load.
+Financial data remains usable offline after the first successful online load. Changes are queued locally and synchronized when the connection returns. API responses are never cached by the Service Worker.
 
 ## Technologies
 
@@ -58,6 +60,10 @@ Financial data remains usable offline after the first successful online load.
 - CSS3 with custom properties, safe-area insets, `100dvh`/`100svh`, and reduced-motion support
 - Vanilla JavaScript and ES Modules
 - LocalStorage behind a dedicated storage layer
+- Cloudflare Worker-compatible backend API
+- Cloudflare D1 for durable per-user snapshots
+- Sites authenticated-user headers for server-side identity
+- Drizzle schema and versioned SQL migrations
 - Chart.js
 - Lucide Icons
 - Web App Manifest and Service Worker
@@ -87,12 +93,22 @@ fintrack/
 │   ├── debts.js
 │   ├── analytics.js
 │   ├── settings.js
+│   ├── sync.js
 │   ├── backup.js
 │   ├── notifications.js
 │   └── utils.js
 ├── assets/
 │   ├── icons/
 │   └── screenshots/
+├── server/
+│   └── api.js
+├── db/
+│   └── schema.ts
+├── drizzle/
+├── scripts/
+│   └── build.mjs
+├── tests/
+├── package.json
 ├── README.md
 ├── LICENSE
 └── .gitignore
@@ -100,7 +116,17 @@ fintrack/
 
 ## Installation
 
-No dependency installation or compilation is required. Clone or download the repository and serve it over HTTP. Service Workers do not work when `index.html` is opened directly through `file://`.
+Clone the repository and install the development dependencies:
+
+```bash
+pnpm install
+```
+
+The static application can still be served directly over HTTP. The production build packages the static assets and backend into a Cloudflare Worker-compatible entry point:
+
+```bash
+pnpm build
+```
 
 ## Run locally
 
@@ -163,6 +189,20 @@ FinTrack stores all information on the current browser profile with these keys:
 
 The storage module provides `getAll`, `getById`, `create`, `update`, `remove`, `clear`, `exportAll`, `importAll`, `initializeDemoData`, `generateId`, and `validateData` capabilities through focused modules.
 
+## Backend and synchronization
+
+The production backend exposes same-origin endpoints:
+
+- `GET /api/session` — returns the authenticated user.
+- `GET /api/sync` — loads the current user's cloud snapshot and revision.
+- `PUT /api/sync` — validates and saves a snapshot using optimistic revision checks.
+- `DELETE /api/sync` — removes the current user's cloud snapshot.
+- `GET /api/health` — checks database availability.
+
+Every database operation is scoped by the authenticated email forwarded by Sites. The browser never chooses or submits an owner identifier. Writes also require a matching same-origin request, payloads are size-limited and validated, and API responses use `no-store`.
+
+LocalStorage remains the immediate offline data source. On launch, FinTrack compares the local synchronization metadata with the server revision, imports a newer server snapshot when safe, and sends local changes after a short debounce. Concurrent changes are reported as a conflict instead of silently overwriting another device.
+
 ## Export and import
 
 The Backup screen exports a complete versioned JSON file named `fintrack-backup-YYYY-MM-DD.json` and operations as a UTF-8 BOM, semicolon-delimited CSV file compatible with Excel. Supported mobile browsers use the Web Share API; other browsers download the file.
@@ -171,8 +211,8 @@ JSON imports are parsed as data, validated, and never executed. FinTrack creates
 
 ## Limitations
 
-- Data is local to one browser profile and is not synchronized between devices.
-- Clearing Safari or browser site data removes FinTrack records.
+- Cloud synchronization is available on the authenticated Sites deployment; a plain static GitHub Pages deployment remains local-only.
+- Clearing browser data removes the offline copy, but authenticated users can restore the latest synchronized snapshot.
 - The project does not connect to banks, exchange rates, cloud storage, or external accounts.
 - Budget and recurring-operation notices are shown when the app opens; system push notifications are not implemented.
 - Currency conversion is not performed between accounts.
@@ -180,7 +220,7 @@ JSON imports are parsed as data, validated, and never executed. FinTrack creates
 
 ## Security
 
-**FinTrack is a client-side personal finance tracker. Data is stored locally on the user's device. The application is not connected to banks and should not be used to store passwords, card numbers or other sensitive credentials.**
+**FinTrack is a personal finance tracker with an offline copy and authenticated cloud synchronization. It is not connected to banks and should not be used to store passwords, full card numbers, PINs or other credentials.**
 
 Use JSON backups responsibly and do not publish files containing real financial records.
 

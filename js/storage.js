@@ -14,6 +14,7 @@ export const STORAGE_KEYS = {
   appState: "fintrack_app_state",
 };
 
+const SYNC_META_KEY = "fintrack_sync_meta";
 const ARRAY_STORES = ["accounts", "transactions", "categories", "budgets", "goals", "debts", "recurring", "backups"];
 
 const defaults = {
@@ -61,6 +62,19 @@ function read(store) {
 
 function write(store, value) {
   localStorage.setItem(STORAGE_KEYS[store], JSON.stringify(value));
+  if (!window.__fintrackSyncImporting && store !== "backups") {
+    try {
+      const meta = JSON.parse(localStorage.getItem(SYNC_META_KEY)) || {};
+      localStorage.setItem(SYNC_META_KEY, JSON.stringify({
+        ...meta,
+        localUpdatedAt: new Date().toISOString(),
+      }));
+    } catch {
+      localStorage.setItem(SYNC_META_KEY, JSON.stringify({
+        localUpdatedAt: new Date().toISOString(),
+      }));
+    }
+  }
   window.dispatchEvent(new CustomEvent("fintrack:datachange", { detail: { store } }));
   return value;
 }
@@ -259,6 +273,7 @@ export function initializeEmptyData({ initialBalance = 0, currency = "KZT" } = {
 
 export function resetApplication() {
   Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+  localStorage.removeItem(SYNC_META_KEY);
 }
 
 export { read, write };

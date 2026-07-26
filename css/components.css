@@ -1149,8 +1149,9 @@
   position: fixed;
   z-index: 1000;
   inset: 0;
-  display: grid;
-  place-items: start center;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
   overflow: auto;
   background:
     radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 36%),
@@ -1163,6 +1164,7 @@
 }
 
 .auth-card {
+  flex: none;
   width: min(100%, 440px);
   border: 1px solid var(--border);
   border-radius: 24px;

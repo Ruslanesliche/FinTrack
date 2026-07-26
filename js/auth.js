@@ -31,6 +31,7 @@ function setBusy(form, busy) {
 
 function renderShell(content, title, subtitle) {
   const screen = authScreen();
+  screen.dataset.authLayout = "center";
   const app = document.querySelector(".app-shell");
   if (app) app.hidden = true;
   screen.hidden = false;
@@ -221,6 +222,7 @@ function renderRegister() {
     <div class="auth-links"><button type="button" data-auth-view="login">Уже есть аккаунт? Войти</button></div>`,
   "Создание аккаунта",
   "Используйте личный email — на него придёт подтверждение.");
+  screen.dataset.authLayout = "scroll";
   bindViewLinks(screen);
   bindPasswordToggles(screen);
   const form = screen.querySelector("#auth-form");
@@ -299,6 +301,7 @@ function renderPasswordUpdate() {
     </form>`,
   "Новый пароль",
   "Придумайте пароль, который не используете в других сервисах.");
+  screen.dataset.authLayout = "scroll";
   bindPasswordToggles(screen);
   const form = screen.querySelector("#auth-form");
   bindPasswordGuidance(form);

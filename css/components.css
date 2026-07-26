@@ -1174,6 +1174,10 @@
   padding: clamp(24px, 5vw, 40px);
 }
 
+.auth-screen[data-auth-layout="scroll"] .auth-card {
+  margin-block: 0;
+}
+
 .auth-brand {
   display: flex;
   align-items: center;

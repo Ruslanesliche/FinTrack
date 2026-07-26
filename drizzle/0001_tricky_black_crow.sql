@@ -1,0 +1,1 @@
+CREATE INDEX `fintrack_snapshots_updated_at_idx` ON `fintrack_snapshots` (`updated_at`);

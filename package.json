@@ -1,0 +1,16 @@
+{
+  "name": "fintrack",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first personal finance PWA with authenticated cloud sync.",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "db:generate": "drizzle-kit generate"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.10",
+    "drizzle-orm": "0.45.2"
+  }
+}

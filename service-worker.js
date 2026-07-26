@@ -1,4 +1,4 @@
-const CACHE_NAME = "fintrack-static-v1.0.1";
+const CACHE_NAME = "fintrack-static-v1.1.0";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -19,6 +19,7 @@ const APP_SHELL = [
   "./js/debts.js",
   "./js/analytics.js",
   "./js/settings.js",
+  "./js/sync.js",
   "./js/backup.js",
   "./js/notifications.js",
   "./js/utils.js",
@@ -46,6 +47,11 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   if (event.request.method !== "GET") return;
   const isNavigation = event.request.mode === "navigate";
   if (isNavigation) {

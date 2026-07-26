@@ -208,6 +208,25 @@ canvas {
   box-shadow: 0 0 0 4px var(--income-soft);
 }
 
+.privacy-dot[data-status="syncing"],
+.privacy-dot[data-status="connecting"] {
+  background: var(--warning);
+  box-shadow: 0 0 0 4px var(--warning-soft);
+}
+
+.privacy-dot[data-status="error"],
+.privacy-dot[data-status="conflict"] {
+  background: var(--expense);
+  box-shadow: 0 0 0 4px var(--expense-soft);
+}
+
+.privacy-dot[data-status="offline"],
+.privacy-dot[data-status="local"],
+.privacy-dot[data-status="signed-out"] {
+  background: var(--neutral);
+  box-shadow: 0 0 0 4px var(--neutral-soft);
+}
+
 .app-column {
   min-height: 100vh;
   min-height: 100dvh;

@@ -7,6 +7,7 @@ import { changeGoalSavings, createGoal, goalProgress } from "./goals.js";
 import { closeModal, confirmDialog, initializeModal, refreshIcons, showModal, showToast } from "./notifications.js";
 import { startRouter } from "./router.js";
 import { applySettings, bindSystemTheme, updateSettings } from "./settings.js";
+import { deleteCloudSnapshot, getSyncState, initializeCloudSync, startAutoSync, syncNow } from "./sync.js";
 import {
   create,
   exportAll,
@@ -88,6 +89,13 @@ const ROUTE_META = {
 
 function settings() {
   return getSettings();
+}
+
+function updateSyncUI(sync = getSyncState()) {
+  const dot = document.getElementById("sync-dot");
+  const note = document.getElementById("sync-note-text");
+  if (dot) dot.dataset.status = sync.status;
+  if (note) note.textContent = sync.message;
 }
 
 function symbol() {
@@ -1328,6 +1336,10 @@ function renderMore() {
 
 function renderSettings() {
   const current = settings();
+  const cloud = getSyncState();
+  const cloudIdentity = cloud.user?.email
+    ? `Аккаунт: ${escapeHTML(cloud.user.email)}`
+    : "Доступ определяется входом в приложение";
   page(`
     <div class="content-grid">
       <section class="card card-pad">
@@ -1351,6 +1363,11 @@ function renderSettings() {
       </section>
     </div>
     <div class="analytics-grid">
+      <section class="card card-pad">
+        <div class="card-header"><div><h2>Облачная синхронизация</h2><p>${cloudIdentity}</p></div></div>
+        <p class="muted small" id="settings-sync-status">${escapeHTML(cloud.message)}</p>
+        <button class="button button-secondary" id="sync-now" type="button" style="margin-top:12px">${renderIcon("cloud-upload")} Синхронизировать сейчас</button>
+      </section>
       <section class="card card-pad">
         <div class="card-header"><div><h2>Демонстрационные данные</h2><p>Быстро посмотреть все возможности</p></div></div>
         <p class="muted small">Демонстрационный набор содержит счета, 30+ операций, бюджеты, цели, долги и регулярные платежи.</p>
@@ -1380,6 +1397,17 @@ function renderSettings() {
       else showToast("Настройка сохранена.", { duration: 1800 });
     }, event === "input" ? 350 : 0));
   });
+  document.getElementById("sync-now")?.addEventListener("click", async () => {
+    const button = document.getElementById("sync-now");
+    button.disabled = true;
+    const result = await syncNow();
+    button.disabled = false;
+    document.getElementById("settings-sync-status").textContent = result.message;
+    updateSyncUI(result);
+    showToast(result.message, {
+      type: ["error", "conflict"].includes(result.status) ? "warning" : "success",
+    });
+  });
   document.getElementById("reload-demo").addEventListener("click", () => confirmDialog({
     title: "Заменить данные демонстрационными?",
     message: "Текущие счета, операции, бюджеты, цели и долги будут заменены. Сначала экспортируйте резервную копию, если они нужны.",
@@ -1393,12 +1421,17 @@ function renderSettings() {
   }));
   document.getElementById("reset-app").addEventListener("click", () => confirmDialog({
     title: "Сбросить FinTrack?",
-    message: "Все локальные данные будут удалены. После сброса снова откроется приветствие.",
+    message: "Все локальные и синхронизированные данные будут удалены. После сброса снова откроется приветствие.",
     confirmLabel: "Удалить всё",
     danger: true,
-    onConfirm: () => {
-      resetApplication();
-      location.reload();
+    onConfirm: async () => {
+      try {
+        await deleteCloudSnapshot();
+        resetApplication();
+        location.reload();
+      } catch {
+        showToast("Не удалось удалить облачную копию. Данные сохранены, попробуйте ещё раз.", { type: "error" });
+      }
     },
   }));
 }
@@ -1612,7 +1645,8 @@ function registerPWA() {
   });
 }
 
-function initializeApp() {
+async function initializeApp() {
+  await initializeCloudSync();
   applySettings();
   bindSystemTheme();
   renderNavigation();
@@ -1625,8 +1659,11 @@ function initializeApp() {
     showToast(`${budget.name}: использовано ${formatNumber(progress.percent)}% лимита.`, { type: progress.percent >= 100 ? "error" : "warning", title: "Состояние бюджета", duration: 7_000 });
   });
   startRouter(renderRoute);
+  startAutoSync();
   initializeOnboarding();
   registerPWA();
+  updateSyncUI();
+  addEventListener("fintrack:syncchange", (event) => updateSyncUI(event.detail));
   addEventListener("fintrack:datachange", () => {
     document.getElementById("profile-button").textContent = (settings().userName || "П").slice(0, 1).toLocaleUpperCase("ru");
   });

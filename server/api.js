@@ -38,21 +38,44 @@ function json(data, status = 200, headers = {}) {
   });
 }
 
-function decodeDisplayName(request) {
-  const value = request.headers.get("oai-authenticated-user-full-name");
-  const encoding = request.headers.get("oai-authenticated-user-full-name-encoding");
-  if (!value || encoding !== "percent-encoded-utf-8") return null;
+function authConfig(env) {
+  const url = env?.SUPABASE_URL?.trim().replace(/\/+$/, "");
+  const publishableKey = env?.SUPABASE_PUBLISHABLE_KEY?.trim();
+  if (!url || !publishableKey) return null;
+  return { url, publishableKey };
+}
+
+function bearerToken(request) {
+  const authorization = request.headers.get("authorization") || "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+export async function getAuthenticatedUser(request, env) {
+  const config = authConfig(env);
+  const token = bearerToken(request);
+  if (!config || !token) return null;
+
+  const authFetch = env?.AUTH_FETCH || fetch;
+  let response;
   try {
-    return decodeURIComponent(value).trim().slice(0, 120) || null;
+    response = await authFetch(`${config.url}/auth/v1/user`, {
+      headers: {
+        apikey: config.publishableKey,
+        authorization: `Bearer ${token}`,
+      },
+    });
   } catch {
     return null;
   }
-}
+  if (!response.ok) return null;
 
-export function getAuthenticatedUser(request) {
-  const email = request.headers.get("oai-authenticated-user-email")?.trim().toLowerCase();
-  if (!email || email.length > 254 || !email.includes("@")) return null;
-  return { email, name: decodeDisplayName(request) };
+  const identity = await response.json().catch(() => null);
+  const email = identity?.email?.trim().toLowerCase();
+  if (!identity?.id || !email || email.length > 254 || !email.includes("@")) return null;
+  const rawName = identity.user_metadata?.full_name || identity.user_metadata?.name;
+  const name = typeof rawName === "string" ? rawName.trim().slice(0, 120) || null : null;
+  return { id: identity.id, email, name };
 }
 
 export function validateSnapshot(data) {
@@ -144,6 +167,13 @@ function sameOriginWrite(request) {
 export async function handleApiRequest(request, env) {
   const url = new URL(request.url);
 
+  if (url.pathname === "/api/auth/config" && request.method === "GET") {
+    const config = authConfig(env);
+    return config
+      ? json(config)
+      : json({ error: "auth_not_configured" }, 503);
+  }
+
   if (request.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
@@ -151,7 +181,7 @@ export async function handleApiRequest(request, env) {
     });
   }
 
-  const user = getAuthenticatedUser(request);
+  const user = await getAuthenticatedUser(request, env);
   if (!user) {
     return json({ error: "authentication_required" }, 401);
   }

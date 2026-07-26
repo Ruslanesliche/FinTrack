@@ -1,4 +1,5 @@
 import { accountExpenseSeries, analyticsSummary, monthlySeries, weekdaySeries } from "./analytics.js";
+import { getAuthUser, initializeAuth, signOut } from "./auth.js";
 import { exportCSV, exportJSON, importBackup, readBackupFile, restoreBackup } from "./backup.js";
 import { activeBudgetAlerts, budgetProgress, createBudget } from "./budgets.js";
 import { categoryById, createCategory } from "./categories.js";
@@ -1337,6 +1338,7 @@ function renderMore() {
 function renderSettings() {
   const current = settings();
   const cloud = getSyncState();
+  const authUser = getAuthUser();
   const cloudIdentity = cloud.user?.email
     ? `Аккаунт: ${escapeHTML(cloud.user.email)}`
     : "Доступ определяется входом в приложение";
@@ -1367,6 +1369,7 @@ function renderSettings() {
         <div class="card-header"><div><h2>Облачная синхронизация</h2><p>${cloudIdentity}</p></div></div>
         <p class="muted small" id="settings-sync-status">${escapeHTML(cloud.message)}</p>
         <button class="button button-secondary" id="sync-now" type="button" style="margin-top:12px">${renderIcon("cloud-upload")} Синхронизировать сейчас</button>
+        ${authUser ? `<button class="button button-secondary" id="sign-out" type="button" style="margin-top:10px">${renderIcon("log-out")} Выйти из аккаунта</button>` : ""}
       </section>
       <section class="card card-pad">
         <div class="card-header"><div><h2>Демонстрационные данные</h2><p>Быстро посмотреть все возможности</p></div></div>
@@ -1408,6 +1411,7 @@ function renderSettings() {
       type: ["error", "conflict"].includes(result.status) ? "warning" : "success",
     });
   });
+  document.getElementById("sign-out")?.addEventListener("click", () => signOut());
   document.getElementById("reload-demo").addEventListener("click", () => confirmDialog({
     title: "Заменить данные демонстрационными?",
     message: "Текущие счета, операции, бюджеты, цели и долги будут заменены. Сначала экспортируйте резервную копию, если они нужны.",
@@ -1646,9 +1650,11 @@ function registerPWA() {
 }
 
 async function initializeApp() {
-  await initializeCloudSync();
   applySettings();
   bindSystemTheme();
+  const auth = await initializeAuth();
+  if (!auth.ready) return;
+  await initializeCloudSync();
   renderNavigation();
   initializeModal();
   document.getElementById("global-search-button").addEventListener("click", openGlobalSearch);

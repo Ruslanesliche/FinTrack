@@ -1,9 +1,11 @@
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { extname, join, relative, resolve, sep } from "node:path";
+import { build } from "esbuild";
 
 const root = resolve(import.meta.dirname, "..");
 const outputDirectory = join(root, "dist", "server");
-const assetRoots = ["index.html", "offline.html", "manifest.json", "service-worker.js", "css", "js", "assets"];
+const browserBundle = join(root, "dist", "assets", "app.bundle.js");
+const assetRoots = ["index.html", "offline.html", "manifest.json", "service-worker.js", "css", "assets"];
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -28,12 +30,30 @@ async function collectFiles(path) {
   return nested.flat();
 }
 
+await rm(join(root, "dist"), { recursive: true, force: true });
+await mkdir(join(root, "dist", "assets"), { recursive: true });
+await build({
+  absWorkingDir: root,
+  entryPoints: ["./js/app.js"],
+  outfile: "./dist/assets/app.bundle.js",
+  bundle: true,
+  format: "esm",
+  minify: true,
+  target: ["es2022"],
+});
+
 const files = (await Promise.all(assetRoots.map((path) => collectFiles(join(root, path))))).flat();
+files.push(browserBundle);
 const assets = {};
 
 for (const file of files.sort()) {
-  const key = relative(root, file).split(sep).join("/");
-  const body = await readFile(file);
+  const key = file === browserBundle
+    ? "app.bundle.js"
+    : relative(root, file).split(sep).join("/");
+  let body = await readFile(file);
+  if (key === "index.html") {
+    body = Buffer.from(body.toString("utf8").replace("./js/app.js", "./app.bundle.js"));
+  }
   assets[key] = {
     type: MIME_TYPES[extname(file).toLowerCase()] || "application/octet-stream",
     body: body.toString("base64"),
@@ -93,7 +113,6 @@ export default {
 };
 `;
 
-await rm(join(root, "dist"), { recursive: true, force: true });
 await mkdir(outputDirectory, { recursive: true });
 await writeFile(join(outputDirectory, "index.js"), worker);
 await writeFile(join(outputDirectory, "api.js"), await readFile(join(root, "server", "api.js")));

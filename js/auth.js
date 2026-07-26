@@ -29,6 +29,8 @@ function setBusy(form, busy) {
 
 function renderShell(content, title, subtitle) {
   const screen = authScreen();
+  const app = document.querySelector(".app-shell");
+  if (app) app.hidden = true;
   screen.hidden = false;
   screen.innerHTML = `
     <section class="auth-card" aria-labelledby="auth-title">
@@ -232,6 +234,8 @@ export async function initializeAuth() {
   }
 
   authScreen().hidden = true;
+  const app = document.querySelector(".app-shell");
+  if (app) app.hidden = false;
   return { ready: true, configured: true, user: currentSession.user };
 }
 

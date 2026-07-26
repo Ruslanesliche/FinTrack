@@ -1,4 +1,4 @@
-const CACHE_NAME = "fintrack-static-v1.1.0";
+const CACHE_NAME = "fintrack-static-v1.2.0";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -9,7 +9,9 @@ const APP_SHELL = [
   "./css/components.css",
   "./css/mobile.css",
   "./css/animations.css",
+  "./app.bundle.js",
   "./js/app.js",
+  "./js/auth.js",
   "./js/router.js",
   "./js/storage.js",
   "./js/transactions.js",

@@ -38,7 +38,7 @@ Add your GitHub Pages URL here
 - Global search across transactions, categories, accounts, debts, goals, notes, and tags.
 - Light, dark, and system themes; three restrained accent palettes; persistent privacy controls.
 - JSON backup and restore, automatic pre-import local backup, and Excel-compatible UTF-8 CSV export.
-- Authenticated, per-user cloud synchronization with optimistic conflict detection.
+- Email/password registration, email confirmation, password recovery, and per-user cloud synchronization.
 - Automatic migration of existing local data to the cloud after the first authenticated launch.
 - Installable PWA with offline app shell and iPhone safe-area support.
 
@@ -62,7 +62,7 @@ Financial data remains usable offline after the first successful online load. Ch
 - LocalStorage behind a dedicated storage layer
 - Cloudflare Worker-compatible backend API
 - Cloudflare D1 for durable per-user snapshots
-- Sites authenticated-user headers for server-side identity
+- Supabase Auth for email identity and access-token validation
 - Drizzle schema and versioned SQL migrations
 - Chart.js
 - Lucide Icons
@@ -193,15 +193,27 @@ The storage module provides `getAll`, `getById`, `create`, `update`, `remove`, `
 
 The production backend exposes same-origin endpoints:
 
+- `GET /api/auth/config` — returns the public Supabase URL and publishable key used by the browser.
 - `GET /api/session` — returns the authenticated user.
 - `GET /api/sync` — loads the current user's cloud snapshot and revision.
 - `PUT /api/sync` — validates and saves a snapshot using optimistic revision checks.
 - `DELETE /api/sync` — removes the current user's cloud snapshot.
 - `GET /api/health` — checks database availability.
 
-Every database operation is scoped by the authenticated email forwarded by Sites. The browser never chooses or submits an owner identifier. Writes also require a matching same-origin request, payloads are size-limited and validated, and API responses use `no-store`.
+Every database operation is scoped by the email from a Supabase access token validated by the backend. The browser never chooses or submits an owner identifier. Writes also require a matching same-origin request, payloads are size-limited and validated, and API responses use `no-store`.
 
 LocalStorage remains the immediate offline data source. On launch, FinTrack compares the local synchronization metadata with the server revision, imports a newer server snapshot when safe, and sends local changes after a short debounce. Concurrent changes are reported as a conflict instead of silently overwriting another device.
+
+### Email authentication setup
+
+Create a Supabase project, leave email/password sign-in enabled, and add the production FinTrack URL to the Supabase **Site URL** and **Redirect URLs**. Configure these runtime variables for the Sites deployment:
+
+```dotenv
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
+```
+
+The publishable key is intentionally available to the browser. Never configure or expose a Supabase secret key or `service_role` key in FinTrack. For production email delivery, configure custom SMTP in Supabase instead of relying on the limited default sender.
 
 ## Export and import
 
@@ -211,7 +223,7 @@ JSON imports are parsed as data, validated, and never executed. FinTrack creates
 
 ## Limitations
 
-- Cloud synchronization is available on the authenticated Sites deployment; a plain static GitHub Pages deployment remains local-only.
+- Cloud synchronization and email registration are available on the configured Sites deployment; a plain static GitHub Pages deployment remains local-only.
 - Clearing browser data removes the offline copy, but authenticated users can restore the latest synchronized snapshot.
 - The project does not connect to banks, exchange rates, cloud storage, or external accounts.
 - Budget and recurring-operation notices are shown when the app opens; system push notifications are not implemented.

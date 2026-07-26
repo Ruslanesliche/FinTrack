@@ -71,21 +71,38 @@ class MemoryDatabase {
   }
 }
 
+function environment(database) {
+  return {
+    ...(database ? { DB: database } : {}),
+    SUPABASE_URL: "https://project.supabase.co",
+    SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+    AUTH_FETCH: async (_url, options) => {
+      if (options.headers.authorization !== "Bearer valid-token") {
+        return new Response(JSON.stringify({ error: "invalid_token" }), { status: 401 });
+      }
+      return Response.json({
+        id: "user-123",
+        email: "Ruslan@Example.com",
+        user_metadata: { full_name: "Руслан" },
+      });
+    },
+  };
+}
+
+const authorization = { authorization: "Bearer valid-token" };
+
 test("validates complete FinTrack snapshots", () => {
   assert.equal(validateSnapshot(validSnapshot), true);
   assert.equal(validateSnapshot({ ...validSnapshot, transactions: null }), false);
   assert.equal(validateSnapshot({ ...validSnapshot, settings: [] }), false);
 });
 
-test("reads and normalizes the authenticated Sites user", () => {
+test("validates a Supabase access token and normalizes its user", async () => {
   const request = new Request("https://fintrack.example/api/session", {
-    headers: {
-      "oai-authenticated-user-email": " Ruslan@Example.com ",
-      "oai-authenticated-user-full-name": "%D0%A0%D1%83%D1%81%D0%BB%D0%B0%D0%BD",
-      "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
-    },
+    headers: authorization,
   });
-  assert.deepEqual(getAuthenticatedUser(request), {
+  assert.deepEqual(await getAuthenticatedUser(request, environment()), {
+    id: "user-123",
     email: "ruslan@example.com",
     name: "Руслан",
   });
@@ -94,23 +111,39 @@ test("reads and normalizes the authenticated Sites user", () => {
 test("rejects unauthenticated API requests before database access", async () => {
   const response = await handleApiRequest(
     new Request("https://fintrack.example/api/sync"),
-    {},
+    environment(),
   );
   assert.equal(response.status, 401);
   assert.deepEqual(await response.json(), { error: "authentication_required" });
 });
 
+test("serves the public browser auth configuration", async () => {
+  const response = await handleApiRequest(
+    new Request("https://fintrack.example/api/auth/config"),
+    environment(),
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    url: "https://project.supabase.co",
+    publishableKey: "sb_publishable_test",
+  });
+});
+
 test("returns the authenticated session without requiring storage", async () => {
   const response = await handleApiRequest(
     new Request("https://fintrack.example/api/session", {
-      headers: { "oai-authenticated-user-email": "ruslan@example.com" },
+      headers: authorization,
     }),
-    {},
+    environment(),
   );
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {
     authenticated: true,
-    user: { email: "ruslan@example.com", name: null },
+    user: {
+      id: "user-123",
+      email: "ruslan@example.com",
+      name: "Руслан",
+    },
   });
 });
 
@@ -119,7 +152,7 @@ test("stores, loads, and conflict-checks an authenticated snapshot", async () =>
   const headers = {
     "content-type": "application/json",
     origin: "https://fintrack.example",
-    "oai-authenticated-user-email": "ruslan@example.com",
+    ...authorization,
   };
 
   const saved = await handleApiRequest(
@@ -132,16 +165,16 @@ test("stores, loads, and conflict-checks an authenticated snapshot", async () =>
         clientUpdatedAt: "2026-07-26T10:00:00.000Z",
       }),
     }),
-    { DB: database },
+    environment(database),
   );
   assert.equal(saved.status, 200);
   assert.equal((await saved.json()).revision, 1);
 
   const loaded = await handleApiRequest(
     new Request("https://fintrack.example/api/sync", {
-      headers: { "oai-authenticated-user-email": "ruslan@example.com" },
+      headers: authorization,
     }),
-    { DB: database },
+    environment(database),
   );
   assert.equal(loaded.status, 200);
   assert.deepEqual((await loaded.json()).data, validSnapshot);
@@ -155,7 +188,7 @@ test("stores, loads, and conflict-checks an authenticated snapshot", async () =>
         expectedRevision: 0,
       }),
     }),
-    { DB: database },
+    environment(database),
   );
   assert.equal(conflict.status, 409);
   assert.equal((await conflict.json()).error, "sync_conflict");

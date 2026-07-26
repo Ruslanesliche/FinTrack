@@ -12,7 +12,8 @@ export function normalizeEmail(value) {
 
 export function friendlyAuthError(error, fallback) {
   const code = String(error?.code || "").toLowerCase();
-  const message = String(error?.message || "").toLowerCase();
+  const originalMessage = String(error?.message || "").replace(/\s+/gu, " ").trim();
+  const message = originalMessage.toLowerCase();
   const status = Number(error?.status || 0);
 
   if (
@@ -50,5 +51,11 @@ export function friendlyAuthError(error, fallback) {
     return "Не удалось отправить письмо подтверждения. Проверьте SMTP в Supabase и попробуйте снова.";
   }
 
-  return fallback;
+  const diagnostic = [
+    code ? `код: ${code}` : "",
+    status ? `HTTP ${status}` : "",
+    originalMessage ? `причина: ${originalMessage.slice(0, 180)}` : "",
+  ].filter(Boolean).join("; ");
+
+  return diagnostic ? `${fallback} (${diagnostic})` : fallback;
 }

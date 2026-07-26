@@ -25,6 +25,16 @@ test("explains Supabase SMTP and email errors precisely", () => {
   );
 });
 
-test("keeps the provided fallback for unknown errors", () => {
-  assert.equal(friendlyAuthError({ code: "unknown" }, "fallback"), "fallback");
+test("adds safe diagnostics for unknown errors", () => {
+  assert.equal(
+    friendlyAuthError(
+      { code: "unknown", status: 422, message: "Unknown signup problem" },
+      "fallback",
+    ),
+    "fallback (код: unknown; HTTP 422; причина: Unknown signup problem)",
+  );
+});
+
+test("keeps the provided fallback when the error has no diagnostics", () => {
+  assert.equal(friendlyAuthError({}, "fallback"), "fallback");
 });

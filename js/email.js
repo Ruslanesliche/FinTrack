@@ -47,6 +47,10 @@ export function friendlyAuthError(error, fallback) {
     return "Регистрация по email отключена в Supabase. Включите Email provider.";
   }
 
+  if (code === "anonymous_provider_disabled") {
+    return "Форма не передала email в сервис авторизации. Обновите FinTrack до последней версии и попробуйте снова.";
+  }
+
   if (status >= 500 || code === "unexpected_failure") {
     return "Не удалось отправить письмо подтверждения. Проверьте SMTP в Supabase и попробуйте снова.";
   }

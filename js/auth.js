@@ -25,8 +25,12 @@ function setMessage(message, type = "info") {
 }
 
 function setBusy(form, busy) {
-  form.querySelectorAll("button, input").forEach((element) => {
+  form.setAttribute("aria-busy", String(busy));
+  form.querySelectorAll("button").forEach((element) => {
     element.disabled = busy;
+  });
+  form.querySelectorAll("input").forEach((element) => {
+    element.readOnly = busy;
   });
 }
 
@@ -181,9 +185,9 @@ function renderLogin(message = "") {
   bindEmailNormalization(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    setBusy(form, true);
     setMessage("");
     const data = new FormData(form);
+    setBusy(form, true);
     const { error } = await client.auth.signInWithPassword({
       email: normalizeEmail(data.get("email")),
       password: String(data.get("password")),
@@ -230,8 +234,8 @@ function renderRegister() {
     setMessage("");
     const password = validateNewPassword(form);
     if (!password) return;
-    setBusy(form, true);
     const data = new FormData(form);
+    setBusy(form, true);
     const email = normalizeEmail(data.get("email"));
     const { data: result, error } = await client.auth.signUp({
       email,
@@ -268,8 +272,9 @@ function renderForgot() {
   bindEmailNormalization(form);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const data = new FormData(form);
+    const email = normalizeEmail(data.get("email"));
     setBusy(form, true);
-    const email = normalizeEmail(new FormData(form).get("email"));
     const { error } = await client.auth.resetPasswordForEmail(email, {
       redirectTo: `${location.origin}${location.pathname}`,
     });

@@ -23,6 +23,10 @@ test("explains Supabase SMTP and email errors precisely", () => {
     friendlyAuthError({ status: 500 }, "fallback"),
     /SMTP/,
   );
+  assert.match(
+    friendlyAuthError({ code: "anonymous_provider_disabled" }, "fallback"),
+    /не передала email/,
+  );
 });
 
 test("adds safe diagnostics for unknown errors", () => {

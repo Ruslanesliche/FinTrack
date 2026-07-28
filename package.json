@@ -16,8 +16,8 @@
     "esbuild": "0.25.12"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.110.8",
-    "chart.js": "4.4.7",
-    "lucide": "0.468.0"
+    "@supabase/supabase-js": "2.110.9",
+    "chart.js": "4.5.1",
+    "lucide": "1.27.0"
   }
 }

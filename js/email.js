@@ -21,7 +21,7 @@ export function friendlyAuthError(error, fallback) {
     || message.includes("already registered")
     || message.includes("already exists")
   ) {
-    return "Аккаунт с таким email уже существует. Попробуйте войти.";
+    return "Не удалось завершить регистрацию. Если этот email уже использовался, попробуйте войти или восстановить пароль.";
   }
 
   if (
@@ -55,11 +55,5 @@ export function friendlyAuthError(error, fallback) {
     return "Не удалось отправить письмо подтверждения. Проверьте SMTP в Supabase и попробуйте снова.";
   }
 
-  const diagnostic = [
-    code ? `код: ${code}` : "",
-    status ? `HTTP ${status}` : "",
-    originalMessage ? `причина: ${originalMessage.slice(0, 180)}` : "",
-  ].filter(Boolean).join("; ");
-
-  return diagnostic ? `${fallback} (${diagnostic})` : fallback;
+  return fallback;
 }

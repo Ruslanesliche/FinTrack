@@ -15,6 +15,13 @@
       "when": 1785061770814,
       "tag": "0001_tricky_black_crow",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785229640468,
+      "tag": "0002_glamorous_switch",
+      "breakpoints": true
     }
   ]
 }

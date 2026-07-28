@@ -5,6 +5,7 @@ import { build } from "esbuild";
 const root = resolve(import.meta.dirname, "..");
 const outputDirectory = join(root, "dist", "server");
 const browserBundle = join(root, "dist", "assets", "app.bundle.js");
+const vendorBundle = join(root, "assets", "vendor.bundle.js");
 const assetRoots = ["index.html", "offline.html", "manifest.json", "service-worker.js", "css", "assets"];
 
 const MIME_TYPES = {
@@ -34,11 +35,30 @@ await rm(join(root, "dist"), { recursive: true, force: true });
 await mkdir(join(root, "dist", "assets"), { recursive: true });
 await build({
   absWorkingDir: root,
+  entryPoints: ["./js/vendor-entry.js"],
+  outfile: "./assets/vendor.bundle.js",
+  bundle: true,
+  format: "iife",
+  minify: true,
+  target: ["es2022"],
+});
+await build({
+  absWorkingDir: root,
   entryPoints: ["./js/app.js"],
   outfile: "./dist/assets/app.bundle.js",
   bundle: true,
   format: "esm",
   minify: true,
+  target: ["es2022"],
+});
+await mkdir(outputDirectory, { recursive: true });
+await build({
+  absWorkingDir: root,
+  entryPoints: ["./server/api.js"],
+  outfile: "./dist/server/api.js",
+  bundle: true,
+  format: "esm",
+  platform: "neutral",
   target: ["es2022"],
 });
 
@@ -73,6 +93,24 @@ function decode(base64) {
   return bytes;
 }
 
+function securityHeaders(env) {
+  let connectSource = "'self'";
+  try {
+    connectSource += " " + new URL(env.SUPABASE_URL).origin;
+  } catch {}
+  return {
+    "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src " + connectSource + "; worker-src 'self'; manifest-src 'self'; object-src 'none'; media-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests",
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-resource-policy": "same-origin",
+    "origin-agent-cluster": "?1",
+    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    "referrer-policy": "no-referrer",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+  };
+}
+
 export default {
   async fetch(request, env, context) {
     const url = new URL(request.url);
@@ -83,7 +121,7 @@ export default {
     if (!["GET", "HEAD"].includes(request.method)) {
       return new Response("Method not allowed", {
         status: 405,
-        headers: { allow: "GET, HEAD" },
+        headers: { ...securityHeaders(env), allow: "GET, HEAD" },
       });
     }
 
@@ -94,13 +132,11 @@ export default {
       asset = ASSETS["index.html"];
       path = "index.html";
     }
-    if (!asset) return new Response("Not found", { status: 404 });
+    if (!asset) return new Response("Not found", { status: 404, headers: securityHeaders(env) });
 
     const headers = new Headers({
+      ...securityHeaders(env),
       "content-type": asset.type,
-      "x-content-type-options": "nosniff",
-      "referrer-policy": "strict-origin-when-cross-origin",
-      "permissions-policy": "camera=(), microphone=(), geolocation=()",
       "cache-control": path === "service-worker.js" || path === "index.html"
         ? "no-cache"
         : "public, max-age=3600",
@@ -113,8 +149,6 @@ export default {
 };
 `;
 
-await mkdir(outputDirectory, { recursive: true });
 await writeFile(join(outputDirectory, "index.js"), worker);
-await writeFile(join(outputDirectory, "api.js"), await readFile(join(root, "server", "api.js")));
 
 console.log(`Built ${Object.keys(assets).length} assets into dist/server.`);

@@ -1,6 +1,13 @@
 import { exportAll, getAll, importAll, restoreLatestBackup } from "./storage.js";
 import { downloadBlob, todayISO } from "./utils.js";
 
+const MAX_BACKUP_BYTES = 2_000_000;
+
+export function safeSpreadsheetCell(value) {
+  const text = String(value ?? "");
+  return /^[=+\-@]/u.test(text.trimStart()) ? `'${text}` : text;
+}
+
 async function shareOrDownload(blob, filename, title) {
   const file = new File([blob], filename, { type: blob.type });
   if (navigator.share && navigator.canShare?.({ files: [file] })) {
@@ -23,7 +30,7 @@ export async function exportCSV() {
   const headers = ["ID", "Тип", "Сумма", "Категория", "Счёт", "Дата", "Время", "Описание", "Заметка", "Теги", "Статус"];
   const categories = getAll("categories");
   const accounts = getAll("accounts");
-  const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const quote = (value) => `"${safeSpreadsheetCell(value).replaceAll('"', '""')}"`;
   const rows = getAll("transactions").map((item) => [
     item.id,
     item.type,
@@ -42,6 +49,9 @@ export async function exportCSV() {
 }
 
 export async function readBackupFile(file) {
+  if (!file || file.size > MAX_BACKUP_BYTES) {
+    throw new Error("Файл резервной копии слишком большой. Максимальный размер — 2 МБ.");
+  }
   const text = await file.text();
   const data = JSON.parse(text);
   return data;

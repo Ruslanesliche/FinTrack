@@ -6,6 +6,18 @@ import {
   handleApiRequest,
   validateSnapshot,
 } from "../server/api.js";
+import { normalizeSnapshot } from "../js/validation.js";
+
+function base64Url(value) {
+  return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+const validToken = `${base64Url({ alg: "HS256", typ: "JWT" })}.${base64Url({
+  sub: "user-12345678",
+  iss: "https://project.supabase.co/auth/v1",
+  exp: Math.floor(Date.now() / 1_000) + 3_600,
+  role: "authenticated",
+})}.${"s".repeat(48)}`;
 
 const validSnapshot = {
   app: "FinTrack",
@@ -57,9 +69,9 @@ class MemoryDatabase {
 
   async batch(statements) {
     for (const statement of statements) {
-      if (statement.sql.includes("INSERT INTO fintrack_snapshots")) {
-        const [ownerEmail, payload, revision, clientUpdatedAt, updatedAt] = statement.bindings;
-        this.snapshots.set(ownerEmail, {
+      if (statement.sql.includes("INSERT INTO fintrack_snapshots_v2")) {
+        const [ownerUserId, payload, revision, clientUpdatedAt, updatedAt] = statement.bindings;
+        this.snapshots.set(ownerUserId, {
           payload,
           revision,
           clientUpdatedAt,
@@ -77,11 +89,11 @@ function environment(database) {
     SUPABASE_URL: "https://project.supabase.co",
     SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
     AUTH_FETCH: async (_url, options) => {
-      if (options.headers.authorization !== "Bearer valid-token") {
+      if (options.headers.authorization !== `Bearer ${validToken}`) {
         return new Response(JSON.stringify({ error: "invalid_token" }), { status: 401 });
       }
       return Response.json({
-        id: "user-123",
+        id: "user-12345678",
         email: "Ruslan@Example.com",
         user_metadata: { full_name: "Руслан" },
       });
@@ -89,7 +101,7 @@ function environment(database) {
   };
 }
 
-const authorization = { authorization: "Bearer valid-token" };
+const authorization = { authorization: `Bearer ${validToken}` };
 
 test("validates complete FinTrack snapshots", () => {
   assert.equal(validateSnapshot(validSnapshot), true);
@@ -102,7 +114,7 @@ test("validates a Supabase access token and normalizes its user", async () => {
     headers: authorization,
   });
   assert.deepEqual(await getAuthenticatedUser(request, environment()), {
-    id: "user-123",
+    id: "user-12345678",
     email: "ruslan@example.com",
     name: "Руслан",
   });
@@ -140,7 +152,7 @@ test("returns the authenticated session without requiring storage", async () => 
   assert.deepEqual(await response.json(), {
     authenticated: true,
     user: {
-      id: "user-123",
+      id: "user-12345678",
       email: "ruslan@example.com",
       name: "Руслан",
     },
@@ -177,7 +189,7 @@ test("stores, loads, and conflict-checks an authenticated snapshot", async () =>
     environment(database),
   );
   assert.equal(loaded.status, 200);
-  assert.deepEqual((await loaded.json()).data, validSnapshot);
+  assert.deepEqual((await loaded.json()).data, normalizeSnapshot(validSnapshot));
 
   const conflict = await handleApiRequest(
     new Request("https://fintrack.example/api/sync", {
@@ -192,4 +204,49 @@ test("stores, loads, and conflict-checks an authenticated snapshot", async () =>
   );
   assert.equal(conflict.status, 409);
   assert.equal((await conflict.json()).error, "sync_conflict");
+});
+
+test("rejects malformed JWTs without calling the identity provider", async () => {
+  let called = false;
+  const response = await handleApiRequest(
+    new Request("https://fintrack.example/api/session", {
+      headers: { authorization: "Bearer not-a-jwt" },
+    }),
+    {
+      ...environment(),
+      AUTH_FETCH: async () => {
+        called = true;
+        return new Response(null, { status: 500 });
+      },
+    },
+  );
+  assert.equal(response.status, 401);
+  assert.equal(called, false);
+});
+
+test("rejects cross-origin writes and unsupported content types", async () => {
+  const database = new MemoryDatabase();
+  const crossOrigin = await handleApiRequest(
+    new Request("https://fintrack.example/api/sync", {
+      method: "PUT",
+      headers: {
+        ...authorization,
+        "content-type": "application/json",
+        origin: "https://attacker.example",
+      },
+      body: JSON.stringify({ data: validSnapshot }),
+    }),
+    environment(database),
+  );
+  assert.equal(crossOrigin.status, 403);
+
+  const wrongType = await handleApiRequest(
+    new Request("https://fintrack.example/api/sync", {
+      method: "PUT",
+      headers: { ...authorization, origin: "https://fintrack.example" },
+      body: JSON.stringify({ data: validSnapshot }),
+    }),
+    environment(database),
+  );
+  assert.equal(wrongType.status, 415);
 });

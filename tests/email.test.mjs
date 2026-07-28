@@ -29,14 +29,22 @@ test("explains Supabase SMTP and email errors precisely", () => {
   );
 });
 
-test("adds safe diagnostics for unknown errors", () => {
+test("does not expose provider diagnostics for unknown errors", () => {
   assert.equal(
     friendlyAuthError(
       { code: "unknown", status: 422, message: "Unknown signup problem" },
       "fallback",
     ),
-    "fallback (код: unknown; HTTP 422; причина: Unknown signup problem)",
+    "fallback",
   );
+});
+
+test("does not reveal whether an account exists", () => {
+  const message = friendlyAuthError(
+    { code: "user_already_exists", message: "already registered" },
+    "fallback",
+  );
+  assert.doesNotMatch(message, /существует|зарегистрирован/iu);
 });
 
 test("keeps the provided fallback when the error has no diagnostics", () => {

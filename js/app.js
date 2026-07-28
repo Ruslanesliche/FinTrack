@@ -10,6 +10,7 @@ import { startRouter } from "./router.js";
 import { applySettings, bindSystemTheme, updateSettings } from "./settings.js";
 import { deleteCloudSnapshot, getSyncState, initializeCloudSync, startAutoSync, syncNow } from "./sync.js";
 import {
+  bindStorageToUser,
   create,
   exportAll,
   getAll,
@@ -233,7 +234,7 @@ function initializeOnboarding() {
     () => `<div class="onboarding-visual">${renderIcon("leaf")}</div>
       <p class="eyebrow">Личные финансы без лишнего шума</p>
       <h2 id="onboarding-title">Добро пожаловать в FinTrack</h2>
-      <p class="onboarding-copy">Доходы, расходы, бюджеты и цели — в одном спокойном пространстве. Данные остаются на вашем устройстве.</p>`,
+      <p class="onboarding-copy">Доходы, расходы, бюджеты и цели — в одном спокойном пространстве. Локальная копия синхронизируется только с вашим аккаунтом.</p>`,
     () => `<p class="eyebrow">Шаг 2 из 5</p>
       <h2 id="onboarding-title">Выберите валюту</h2>
       <p class="onboarding-copy">Её можно будет изменить позже в настройках.</p>
@@ -450,15 +451,15 @@ function transactionFormTemplate(transaction = null) {
           <span class="field-label">Категория</span>
           <input type="hidden" name="categoryId" value="${escapeHTML(activeCategory)}">
           <div class="category-picker" id="category-picker">
-            ${categories.filter((item) => item.type === activeType).map((item) => `<button class="category-chip ${item.id === activeCategory ? "selected" : ""}" type="button" data-category-id="${item.id}" data-category-type="${item.type}"><span>${renderIcon(item.icon)}</span><span>${escapeHTML(item.name)}</span></button>`).join("")}
+            ${categories.filter((item) => item.type === activeType).map((item) => `<button class="category-chip ${item.id === activeCategory ? "selected" : ""}" type="button" data-category-id="${escapeHTML(item.id)}" data-category-type="${escapeHTML(item.type)}"><span>${renderIcon(item.icon)}</span><span>${escapeHTML(item.name)}</span></button>`).join("")}
           </div>
           <span class="field-error" id="category-error"></span>
         </div>
       </section>
       <section class="card card-pad">
         <div class="form-grid">
-          <div class="field"><label for="accountId">Счёт</label><select id="accountId" name="accountId" required>${accounts.map((account) => `<option value="${account.id}" ${transaction?.accountId === account.id ? "selected" : ""}>${escapeHTML(account.name)} · ${safeMoney(getAccountBalance(account.id))}</option>`).join("")}</select></div>
-          <div class="field" id="to-account-field" ${activeType !== "transfer" ? "hidden" : ""}><label for="toAccountId">На счёт</label><select id="toAccountId" name="toAccountId"><option value="">Выберите счёт</option>${accounts.map((account) => `<option value="${account.id}" ${transaction?.toAccountId === account.id ? "selected" : ""}>${escapeHTML(account.name)}</option>`).join("")}</select></div>
+          <div class="field"><label for="accountId">Счёт</label><select id="accountId" name="accountId" required>${accounts.map((account) => `<option value="${escapeHTML(account.id)}" ${transaction?.accountId === account.id ? "selected" : ""}>${escapeHTML(account.name)} · ${safeMoney(getAccountBalance(account.id))}</option>`).join("")}</select></div>
+          <div class="field" id="to-account-field" ${activeType !== "transfer" ? "hidden" : ""}><label for="toAccountId">На счёт</label><select id="toAccountId" name="toAccountId"><option value="">Выберите счёт</option>${accounts.map((account) => `<option value="${escapeHTML(account.id)}" ${transaction?.toAccountId === account.id ? "selected" : ""}>${escapeHTML(account.name)}</option>`).join("")}</select></div>
           <div class="field"><label for="date">Дата</label><input id="date" name="date" type="date" value="${escapeHTML(transaction?.date || todayISO())}" required></div>
           <div class="field"><label for="time">Время</label><input id="time" name="time" type="time" value="${escapeHTML(transaction?.time || new Date().toTimeString().slice(0, 5))}"></div>
           <div class="field span-2"><label for="description">Описание</label><input id="description" name="description" maxlength="80" value="${escapeHTML(transaction?.description || "")}" placeholder="Например, продукты на неделю"></div>
@@ -499,7 +500,7 @@ function renderTransactionForm(route) {
     const categories = getAll("categories").filter((item) => item.active !== false && item.type === type);
     const selected = categories.some((item) => item.id === categoryField.value) ? categoryField.value : categories[0]?.id || "";
     categoryField.value = selected;
-    document.getElementById("category-picker").innerHTML = categories.map((item) => `<button class="category-chip ${item.id === selected ? "selected" : ""}" type="button" data-category-id="${item.id}"><span>${renderIcon(item.icon)}</span><span>${escapeHTML(item.name)}</span></button>`).join("");
+    document.getElementById("category-picker").innerHTML = categories.map((item) => `<button class="category-chip ${item.id === selected ? "selected" : ""}" type="button" data-category-id="${escapeHTML(item.id)}"><span>${renderIcon(item.icon)}</span><span>${escapeHTML(item.name)}</span></button>`).join("");
     refreshUIIcons();
   }
 
@@ -590,8 +591,8 @@ function renderTransactions() {
       <div class="filters" id="transaction-filters">
         <div class="field"><label for="transaction-search">Поиск</label><input id="transaction-search" type="search" placeholder="Описание, заметка или тег"></div>
         <div class="field"><label for="transaction-type-filter">Тип</label><select id="transaction-type-filter"><option value="all">Все типы</option><option value="expense">Расходы</option><option value="income">Доходы</option><option value="transfer">Переводы</option></select></div>
-        <div class="field"><label for="transaction-category-filter">Категория</label><select id="transaction-category-filter"><option value="all">Все категории</option>${categories.map((item) => `<option value="${item.id}">${escapeHTML(item.name)} · ${item.type === "income" ? "доход" : "расход"}</option>`).join("")}</select></div>
-        <div class="field"><label for="transaction-account-filter">Счёт</label><select id="transaction-account-filter"><option value="all">Все счета</option>${accounts.map((item) => `<option value="${item.id}">${escapeHTML(item.name)}</option>`).join("")}</select></div>
+        <div class="field"><label for="transaction-category-filter">Категория</label><select id="transaction-category-filter"><option value="all">Все категории</option>${categories.map((item) => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)} · ${item.type === "income" ? "доход" : "расход"}</option>`).join("")}</select></div>
+        <div class="field"><label for="transaction-account-filter">Счёт</label><select id="transaction-account-filter"><option value="all">Все счета</option>${accounts.map((item) => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)}</option>`).join("")}</select></div>
         <div class="field"><label for="transaction-period-filter">Период</label><select id="transaction-period-filter"><option value="all">Всё время</option><option value="today">Сегодня</option><option value="week">Неделя</option><option value="month">Месяц</option><option value="year">Год</option></select></div>
         <div class="field"><label for="transaction-min-filter">Сумма от</label><input id="transaction-min-filter" inputmode="decimal" placeholder="0"></div>
         <div class="field"><label for="transaction-max-filter">Сумма до</label><input id="transaction-max-filter" inputmode="decimal" placeholder="Без лимита"></div>
@@ -683,7 +684,7 @@ function budgetForm() {
     <div class="field span-2"><label for="budget-name">Название</label><input id="budget-name" name="name" maxlength="60" placeholder="Например, Основной бюджет" required></div>
     <div class="field"><label for="budget-limit">Лимит</label><input id="budget-limit" name="limit" inputmode="decimal" placeholder="150 000" required></div>
     <div class="field"><label for="budget-start">Дата начала</label><input id="budget-start" name="startDate" type="date" value="${todayISO()}"></div>
-    <div class="field span-2"><label for="budget-categories">Категории</label><select id="budget-categories" name="categoryIds" multiple size="6"><option value="">Все расходы</option>${categories.map((item) => `<option value="${item.id}">${escapeHTML(item.name)}</option>`).join("")}</select><small class="muted">Оставьте без выбора для общего бюджета. Для нескольких категорий удерживайте Ctrl или ⌘.</small></div>
+    <div class="field span-2"><label for="budget-categories">Категории</label><select id="budget-categories" name="categoryIds" multiple size="6"><option value="">Все расходы</option>${categories.map((item) => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)}</option>`).join("")}</select><small class="muted">Оставьте без выбора для общего бюджета. Для нескольких категорий удерживайте Ctrl или ⌘.</small></div>
     <label class="setting-row span-2" for="budget-recurring"><span><strong>Автоматически повторять</strong><small>Бюджет будет актуален каждый месяц</small></span><span class="switch"><input id="budget-recurring" name="recurring" type="checkbox" checked><span></span></span></label>
     <div class="modal-actions span-2"><button class="button button-secondary" type="button" data-close-modal>Отмена</button><button class="button button-primary" type="submit">Создать бюджет</button></div>`;
   wrapper.addEventListener("submit", (event) => {
@@ -723,7 +724,7 @@ function renderBudgets() {
         const progress = budgetProgress(budget);
         const categoryNames = budget.categoryIds?.length ? budget.categoryIds.map((id) => category(id).name).join(", ") : "Все категории расходов";
         const stateText = progress.state === "exceeded" ? "Превышен" : progress.state === "warning" ? "Близко к лимиту" : "В норме";
-        return `<article class="card entity-card" data-id="${budget.id}">
+        return `<article class="card entity-card" data-id="${escapeHTML(budget.id)}">
           <div class="entity-card-header">
             <div class="entity-icon">${renderIcon("wallet-minimal")}</div>
             <div><h3>${escapeHTML(budget.name)}</h3><p>${escapeHTML(categoryNames)}</p></div>
@@ -805,7 +806,7 @@ function contributionForm(goal) {
   form.innerHTML = `
     <div class="field span-2"><label for="goal-contribution">Сумма</label><input id="goal-contribution" name="amount" inputmode="decimal" placeholder="0" required></div>
     <div class="field"><label for="goal-operation">Действие</label><select id="goal-operation" name="operation"><option value="add">Внести средства</option><option value="subtract">Снять средства</option></select></div>
-    <div class="field"><label for="goal-account">Источник</label><select id="goal-account" name="accountId"><option value="">Просто изменить сумму</option>${accounts.map((account) => `<option value="${account.id}">Списать с ${escapeHTML(account.name)}</option>`).join("")}</select></div>
+    <div class="field"><label for="goal-account">Источник</label><select id="goal-account" name="accountId"><option value="">Просто изменить сумму</option>${accounts.map((account) => `<option value="${escapeHTML(account.id)}">Списать с ${escapeHTML(account.name)}</option>`).join("")}</select></div>
     <div class="modal-actions span-2"><button class="button button-secondary" type="button" data-close-modal>Отмена</button><button class="button button-primary" type="submit">Сохранить</button></div>`;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -843,7 +844,7 @@ function renderGoals() {
   const complete = goals.filter((goal) => goalProgress(goal).complete);
   const renderCards = (items) => items.map((goal) => {
     const progress = goalProgress(goal);
-    return `<article class="card entity-card ${progress.complete ? "goal-complete" : ""}" data-id="${goal.id}">
+    return `<article class="card entity-card ${progress.complete ? "goal-complete" : ""}" data-id="${escapeHTML(goal.id)}">
       <div class="entity-card-header">
         <div class="entity-icon" style="color:${escapeHTML(goal.color)}">${renderIcon(goal.icon || "target")}</div>
         <div><h3>${escapeHTML(goal.name)}</h3><p>${escapeHTML(goal.note || `Срок: ${formatDate(goal.deadline)}`)}</p></div>
@@ -943,7 +944,7 @@ function renderDebts() {
     <div class="analytics-grid" id="debt-list">
       ${visible.length ? visible.map((debt) => {
         const status = debtStatus(debt);
-        return `<article class="card entity-card" data-id="${debt.id}">
+        return `<article class="card entity-card" data-id="${escapeHTML(debt.id)}">
           <div class="entity-card-header">
             <div class="entity-icon">${renderIcon(debt.type === "owed_to_me" ? "hand-coins" : "receipt-russian-ruble")}</div>
             <div><h3>${escapeHTML(debt.person)}</h3><p>${escapeHTML(debt.description || (debt.type === "owed_to_me" ? "Мне должны" : "Я должен"))}</p></div>
@@ -1059,14 +1060,14 @@ function renderCategories() {
         <div class="card-header"><div><h2>Категории доходов и расходов</h2><p>${categories.filter((item) => item.active).length} активных · ${categories.filter((item) => !item.active).length} скрытых</p></div></div>
         <div class="analytics-grid" id="category-list">${visibleCategories.map((item) => {
           const used = getAll("transactions").filter((transaction) => transaction.categoryId === item.id).length;
-          return `<article class="menu-item" data-id="${item.id}" style="${item.active === false ? "opacity:.58" : ""}">
+          return `<article class="menu-item" data-id="${escapeHTML(item.id)}" style="${item.active === false ? "opacity:.58" : ""}">
             <div class="entity-icon" style="color:${escapeHTML(item.color)}">${renderIcon(item.icon)}</div>
             <div><strong>${escapeHTML(item.name)}</strong><small>${item.type === "income" ? "Доход" : "Расход"} · ${used} операций${item.limit ? ` · лимит ${safeMoney(item.limit)}` : ""}</small></div>
             <div class="row-between"><button class="mini-button" type="button" data-category-action="edit" aria-label="Изменить">${renderIcon("pencil")}</button><button class="mini-button danger" type="button" data-category-action="delete" aria-label="Удалить">${renderIcon("trash-2")}</button></div>
           </article>`;
         }).join("")}</div>
       </section>` : `
-      <div class="analytics-grid" id="account-list">${accounts.map((account) => `<article class="card entity-card" data-id="${account.id}" style="${account.active === false ? "opacity:.58" : ""}">
+      <div class="analytics-grid" id="account-list">${accounts.map((account) => `<article class="card entity-card" data-id="${escapeHTML(account.id)}" style="${account.active === false ? "opacity:.58" : ""}">
         <div class="entity-card-header">
           <div class="entity-icon" style="color:${escapeHTML(account.color)}">${renderIcon(account.icon || "wallet-cards")}</div>
           <div><h3>${escapeHTML(account.name)}</h3><p>${escapeHTML(account.type)} · ${escapeHTML(account.currency)}</p></div>
@@ -1145,10 +1146,10 @@ function createChart(id, config) {
   const canvas = document.getElementById(id);
   if (!canvas) return;
   if (!globalThis.Chart) {
-    canvas.replaceWith(Object.assign(document.createElement("div"), { className: "empty-state", textContent: "График станет доступен после первой загрузки Chart.js." }));
+    canvas.replaceWith(Object.assign(document.createElement("div"), { className: "empty-state", textContent: "Модуль графиков не загрузился. Обновите страницу." }));
     return;
   }
-  chartInstances.push(new Chart(canvas, config));
+  chartInstances.push(new globalThis.Chart(canvas, config));
 }
 
 function renderCalendar() {
@@ -1258,8 +1259,8 @@ function recurringForm() {
   form.innerHTML = `
     <div class="field"><label for="rec-type">Тип</label><select id="rec-type" name="type"><option value="expense">Расход</option><option value="income">Доход</option></select></div>
     <div class="field"><label for="rec-amount">Сумма</label><input id="rec-amount" name="amount" inputmode="decimal" required></div>
-    <div class="field"><label for="rec-category">Категория</label><select id="rec-category" name="categoryId">${categories.map((item) => `<option value="${item.id}" data-type="${item.type}" ${item.type === "income" ? "hidden" : ""}>${escapeHTML(item.name)}</option>`).join("")}</select></div>
-    <div class="field"><label for="rec-account">Счёт</label><select id="rec-account" name="accountId">${accounts.map((item) => `<option value="${item.id}">${escapeHTML(item.name)}</option>`).join("")}</select></div>
+    <div class="field"><label for="rec-category">Категория</label><select id="rec-category" name="categoryId">${categories.map((item) => `<option value="${escapeHTML(item.id)}" data-type="${escapeHTML(item.type)}" ${item.type === "income" ? "hidden" : ""}>${escapeHTML(item.name)}</option>`).join("")}</select></div>
+    <div class="field"><label for="rec-account">Счёт</label><select id="rec-account" name="accountId">${accounts.map((item) => `<option value="${escapeHTML(item.id)}">${escapeHTML(item.name)}</option>`).join("")}</select></div>
     <div class="field span-2"><label for="rec-description">Описание</label><input id="rec-description" name="description" placeholder="Например, Интернет" required></div>
     <div class="field"><label for="rec-frequency">Повторение</label><select id="rec-frequency" name="frequency"><option value="daily">Ежедневно</option><option value="weekly">Еженедельно</option><option value="monthly" selected>Ежемесячно</option><option value="yearly">Ежегодно</option></select></div>
     <div class="field"><label for="rec-interval">Интервал</label><input id="rec-interval" name="interval" inputmode="numeric" value="1"></div>
@@ -1314,7 +1315,7 @@ function renderMore() {
       </section>
       <section class="card card-pad">
         <div class="card-header"><div><h2>Регулярные операции</h2><p>Проверяются при каждом запуске</p></div><button class="mini-button" id="add-recurring" type="button">${renderIcon("plus")} Добавить</button></div>
-        <div class="entity-list" id="recurring-list">${recurring.length ? recurring.map((item) => `<article class="menu-item" data-id="${item.id}">
+        <div class="entity-list" id="recurring-list">${recurring.length ? recurring.map((item) => `<article class="menu-item" data-id="${escapeHTML(item.id)}">
           <div class="entity-icon">${renderIcon(item.type === "income" ? "trending-up" : "repeat-2")}</div>
           <div><strong>${escapeHTML(item.description)}</strong><small>${frequencyLabels[item.frequency] || "По интервалу"} · ${safeMoney(item.amount)} · последнее ${escapeHTML(formatDate(item.lastCreated))}</small></div>
           <button class="mini-button danger" type="button" data-recurring-delete aria-label="Удалить">${renderIcon("trash-2")}</button>
@@ -1411,7 +1412,15 @@ function renderSettings() {
       type: ["error", "conflict"].includes(result.status) ? "warning" : "success",
     });
   });
-  document.getElementById("sign-out")?.addEventListener("click", () => signOut());
+  document.getElementById("sign-out")?.addEventListener("click", async () => {
+    try {
+      await signOut();
+      resetApplication();
+      location.reload();
+    } catch {
+      showToast("Не удалось безопасно завершить сеанс. Проверьте подключение и попробуйте снова.", { type: "error" });
+    }
+  });
   document.getElementById("reload-demo").addEventListener("click", () => confirmDialog({
     title: "Заменить данные демонстрационными?",
     message: "Текущие счета, операции, бюджеты, цели и долги будут заменены. Сначала экспортируйте резервную копию, если они нужны.",
@@ -1527,10 +1536,10 @@ function renderAbout() {
         <div class="card-inner">
           <div class="brand"><span class="brand-mark" style="background:white;color:var(--primary-strong)">F</span><span><strong style="font-size:22px">FinTrack</strong><small style="color:rgba(255,255,255,.7)">Personal Finance Manager</small></span></div>
           <div class="balance-value" style="white-space:normal;font-size:clamp(30px,5vw,48px)">Финансы под вашим контролем</div>
-          <p style="max-width:560px;margin:0;color:rgba(255,255,255,.72)">Независимое PWA-приложение без регистрации и банковских подключений. Данные хранятся только в браузере на вашем устройстве.</p>
+          <p style="max-width:560px;margin:0;color:rgba(255,255,255,.72)">PWA-приложение с регистрацией по email и защищённой облачной синхронизацией. FinTrack не подключается к банкам и не запрашивает банковские пароли.</p>
         </div>
       </section>
-      <section class="card card-pad snapshot-card"><div><span class="eyebrow">Версия</span><div class="snapshot-number">1.0</div><p class="muted small">Создано Ruslan Toxeitov</p></div><a class="button button-secondary" href="https://github.com/Ruslanesliche" target="_blank" rel="noopener">${renderIcon("github")} GitHub автора</a></section>
+      <section class="card card-pad snapshot-card"><div><span class="eyebrow">Версия</span><div class="snapshot-number">1.3.0</div><p class="muted small">Создано Ruslan Toxeitov</p></div><a class="button button-secondary" href="https://github.com/Ruslanesliche/FinTrack" target="_blank" rel="noopener noreferrer">${renderIcon("github")} Исходный код</a></section>
     </div>
     <div class="analytics-grid">
       <section class="card card-pad">
@@ -1549,9 +1558,9 @@ function renderAbout() {
       </section>
     </div>
     <section class="card card-pad">
-      <div class="card-header"><div><h2>Приватность и ограничения</h2><p>Честная локальная модель</p></div></div>
+      <div class="card-header"><div><h2>Приватность и ограничения</h2><p>Локальное хранение и облачная синхронизация</p></div></div>
       <div class="security-note">FinTrack — клиентский трекер личных финансов. Приложение не связано с банками и не предназначено для хранения паролей, номеров карт или других чувствительных реквизитов.</div>
-      <p class="muted small" style="margin-top:14px">Локальные данные не синхронизируются между устройствами автоматически. Очистка данных Safari удалит записи FinTrack, поэтому регулярно создавайте резервные копии. Внутренние предупреждения о бюджетах появляются при открытии приложения; системные push-уведомления не используются.</p>
+      <p class="muted small" style="margin-top:14px">Финансовые записи хранятся в браузере и синхронизируются с облачной базой только для вошедшего пользователя по защищённому HTTPS-соединению. Локальное хранилище браузера и облачная копия не имеют сквозного шифрования, поэтому не вводите номера карт, пароли и секретные реквизиты. При выходе локальная копия очищается. Регулярно создавайте резервные копии; системные push-уведомления не используются.</p>
     </section>`);
   document.getElementById("install-pwa").addEventListener("click", async () => {
     if (!deferredInstallPrompt) return;
@@ -1595,7 +1604,7 @@ function openGlobalSearch() {
     }
     const categories = getAll("categories");
     const accounts = getAll("accounts");
-    const transactions = getAll("transactions").filter((item) => [item.description, item.note, ...(item.tags || []), category(item.categoryId).name, accountName(item.accountId)].join(" ").toLocaleLowerCase("ru").includes(normalized)).slice(0, 8).map((item) => ({ type: "Операция", title: item.description || category(item.categoryId).name, meta: `${formatDate(item.date)} · ${money(item.amount)}`, href: `#/transaction/edit/${item.id}` }));
+    const transactions = getAll("transactions").filter((item) => [item.description, item.note, ...(item.tags || []), category(item.categoryId).name, accountName(item.accountId)].join(" ").toLocaleLowerCase("ru").includes(normalized)).slice(0, 8).map((item) => ({ type: "Операция", title: item.description || category(item.categoryId).name, meta: `${formatDate(item.date)} · ${money(item.amount)}`, href: `#/transaction/edit/${encodeURIComponent(item.id)}` }));
     const entities = [
       ...categories.filter((item) => item.name.toLocaleLowerCase("ru").includes(normalized)).slice(0, 4).map((item) => ({ type: "Категория", title: item.name, meta: item.type === "income" ? "Доход" : "Расход", href: "#/categories" })),
       ...accounts.filter((item) => item.name.toLocaleLowerCase("ru").includes(normalized)).slice(0, 4).map((item) => ({ type: "Счёт", title: item.name, meta: money(getAccountBalance(item.id)), href: "#/categories" })),
@@ -1603,7 +1612,7 @@ function openGlobalSearch() {
       ...getAll("goals").filter((item) => [item.name, item.note].join(" ").toLocaleLowerCase("ru").includes(normalized)).slice(0, 4).map((item) => ({ type: "Цель", title: item.name, meta: money(item.saved), href: "#/goals" })),
     ];
     const results = [...transactions, ...entities];
-    target.innerHTML = results.length ? `<div class="search-group"><h3>Результаты</h3>${results.map((item) => `<a class="search-result" href="${item.href}" data-search-result><span><strong>${escapeHTML(item.title)}</strong><small> · ${escapeHTML(item.type)}</small></span><small>${escapeHTML(item.meta || "")}</small></a>`).join("")}</div>` : renderEmpty("search-x", "Ничего не найдено", "Попробуйте другой запрос.");
+    target.innerHTML = results.length ? `<div class="search-group"><h3>Результаты</h3>${results.map((item) => `<a class="search-result" href="${escapeHTML(item.href)}" data-search-result><span><strong>${escapeHTML(item.title)}</strong><small> · ${escapeHTML(item.type)}</small></span><small>${escapeHTML(item.meta || "")}</small></a>`).join("")}</div>` : renderEmpty("search-x", "Ничего не найдено", "Попробуйте другой запрос.");
     target.querySelectorAll("[data-search-result]").forEach((link) => link.addEventListener("click", () => {
       const entries = [query.trim(), ...(getAppState().searchHistory || []).filter((item) => item !== query.trim())].slice(0, 6);
       saveAppState({ searchHistory: entries });
@@ -1654,6 +1663,7 @@ async function initializeApp() {
   bindSystemTheme();
   const auth = await initializeAuth();
   if (!auth.ready) return;
+  bindStorageToUser(auth.user?.id);
   await initializeCloudSync();
   renderNavigation();
   initializeModal();

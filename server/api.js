@@ -1,9 +1,11 @@
+import { normalizeSnapshot } from "../js/validation.js";
+
 const MAX_SNAPSHOT_BYTES = 1_500_000;
-const ARRAY_STORES = ["accounts", "transactions", "categories", "budgets", "goals", "debts", "recurring"];
 
 const CREATE_PROFILES_SQL = `
-  CREATE TABLE IF NOT EXISTS fintrack_profiles (
-    email TEXT PRIMARY KEY NOT NULL,
+  CREATE TABLE IF NOT EXISTS fintrack_profiles_v2 (
+    user_id TEXT PRIMARY KEY NOT NULL,
+    email TEXT NOT NULL,
     display_name TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -11,20 +13,31 @@ const CREATE_PROFILES_SQL = `
 `;
 
 const CREATE_SNAPSHOTS_SQL = `
-  CREATE TABLE IF NOT EXISTS fintrack_snapshots (
-    owner_email TEXT PRIMARY KEY NOT NULL,
+  CREATE TABLE IF NOT EXISTS fintrack_snapshots_v2 (
+    owner_user_id TEXT PRIMARY KEY NOT NULL,
     payload TEXT NOT NULL,
     revision INTEGER NOT NULL DEFAULT 1,
     client_updated_at TEXT,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (owner_email) REFERENCES fintrack_profiles(email) ON DELETE CASCADE
+    FOREIGN KEY (owner_user_id) REFERENCES fintrack_profiles_v2(user_id) ON DELETE CASCADE
   )
 `;
 
 const CREATE_UPDATED_INDEX_SQL = `
-  CREATE INDEX IF NOT EXISTS fintrack_snapshots_updated_at_idx
-  ON fintrack_snapshots(updated_at)
+  CREATE INDEX IF NOT EXISTS fintrack_snapshots_v2_updated_at_idx
+  ON fintrack_snapshots_v2(updated_at)
 `;
+
+const API_SECURITY_HEADERS = {
+  "content-security-policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+  "referrer-policy": "no-referrer",
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+};
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
@@ -32,7 +45,7 @@ function json(data, status = 200, headers = {}) {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      "x-content-type-options": "nosniff",
+      ...API_SECURITY_HEADERS,
       ...headers,
     },
   });
@@ -51,10 +64,27 @@ function bearerToken(request) {
   return match?.[1]?.trim() || null;
 }
 
+function plausibleAccessToken(token, config) {
+  if (token.length < 100 || token.length > 8_192) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const encoded = parts[1].replace(/-/gu, "+").replace(/_/gu, "/");
+    const padded = encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=");
+    const payload = JSON.parse(atob(padded));
+    return typeof payload?.sub === "string"
+      && payload.sub.length > 10
+      && payload.iss === `${config.url}/auth/v1`
+      && Number(payload.exp || 0) > Math.floor(Date.now() / 1_000) - 60;
+  } catch {
+    return false;
+  }
+}
+
 export async function getAuthenticatedUser(request, env) {
   const config = authConfig(env);
   const token = bearerToken(request);
-  if (!config || !token) return null;
+  if (!config || !token || !plausibleAccessToken(token, config)) return null;
 
   const authFetch = env?.AUTH_FETCH || fetch;
   let response;
@@ -79,10 +109,7 @@ export async function getAuthenticatedUser(request, env) {
 }
 
 export function validateSnapshot(data) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
-  if (!data.settings || typeof data.settings !== "object" || Array.isArray(data.settings)) return false;
-  if (data.appState != null && (typeof data.appState !== "object" || Array.isArray(data.appState))) return false;
-  return ARRAY_STORES.every((store) => Array.isArray(data[store]));
+  return normalizeSnapshot(data) !== null;
 }
 
 async function ensureDatabase(env) {
@@ -98,33 +125,34 @@ async function ensureDatabase(env) {
   ]);
 }
 
-async function loadSnapshot(db, email) {
+async function loadSnapshot(db, userId) {
   const row = await db.prepare(`
     SELECT payload, revision, client_updated_at AS clientUpdatedAt, updated_at AS updatedAt
-    FROM fintrack_snapshots
-    WHERE owner_email = ?
-  `).bind(email).first();
+    FROM fintrack_snapshots_v2
+    WHERE owner_user_id = ?
+  `).bind(userId).first();
 
   if (!row) {
     return { data: null, revision: 0, clientUpdatedAt: null, updatedAt: null };
   }
 
-  try {
-    return {
-      data: JSON.parse(row.payload),
-      revision: Number(row.revision) || 0,
-      clientUpdatedAt: row.clientUpdatedAt || null,
-      updatedAt: row.updatedAt || null,
-    };
-  } catch {
-    const error = new Error("The stored snapshot is unreadable.");
+  const data = JSON.parse(row.payload);
+  const normalized = normalizeSnapshot(data);
+  if (!normalized) {
+    const error = new Error("The stored snapshot is invalid.");
     error.status = 500;
     throw error;
   }
+  return {
+    data: normalized,
+    revision: Number(row.revision) || 0,
+    clientUpdatedAt: row.clientUpdatedAt || null,
+    updatedAt: row.updatedAt || null,
+  };
 }
 
 async function saveSnapshot(db, user, data, expectedRevision, clientUpdatedAt) {
-  const existing = await loadSnapshot(db, user.email);
+  const existing = await loadSnapshot(db, user.id);
   if (expectedRevision !== null && expectedRevision !== existing.revision) {
     return { conflict: true, snapshot: existing };
   }
@@ -135,22 +163,23 @@ async function saveSnapshot(db, user, data, expectedRevision, clientUpdatedAt) {
 
   await db.batch([
     db.prepare(`
-      INSERT INTO fintrack_profiles (email, display_name, created_at, updated_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(email) DO UPDATE SET
+      INSERT INTO fintrack_profiles_v2 (user_id, email, display_name, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        email = excluded.email,
         display_name = excluded.display_name,
         updated_at = excluded.updated_at
-    `).bind(user.email, user.name, now, now),
+    `).bind(user.id, user.email, user.name, now, now),
     db.prepare(`
-      INSERT INTO fintrack_snapshots (
-        owner_email, payload, revision, client_updated_at, updated_at
+      INSERT INTO fintrack_snapshots_v2 (
+        owner_user_id, payload, revision, client_updated_at, updated_at
       ) VALUES (?, ?, ?, ?, ?)
-      ON CONFLICT(owner_email) DO UPDATE SET
+      ON CONFLICT(owner_user_id) DO UPDATE SET
         payload = excluded.payload,
         revision = excluded.revision,
         client_updated_at = excluded.client_updated_at,
         updated_at = excluded.updated_at
-    `).bind(user.email, payload, revision, clientUpdatedAt, now),
+    `).bind(user.id, payload, revision, clientUpdatedAt, now),
   ]);
 
   return {
@@ -177,7 +206,7 @@ export async function handleApiRequest(request, env) {
   if (request.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
-      headers: { allow: "GET, PUT, DELETE, OPTIONS" },
+      headers: { ...API_SECURITY_HEADERS, allow: "GET, PUT, DELETE, OPTIONS" },
     });
   }
 
@@ -202,7 +231,7 @@ export async function handleApiRequest(request, env) {
     }
 
     if (request.method === "GET") {
-      return json(await loadSnapshot(env.DB, user.email));
+      return json(await loadSnapshot(env.DB, user.id));
     }
 
     if (!sameOriginWrite(request)) {
@@ -210,6 +239,11 @@ export async function handleApiRequest(request, env) {
     }
 
     if (request.method === "PUT") {
+      const contentType = request.headers.get("content-type") || "";
+      if (!contentType.toLowerCase().startsWith("application/json")) {
+        return json({ error: "unsupported_media_type" }, 415);
+      }
+
       const contentLength = Number(request.headers.get("content-length")) || 0;
       if (contentLength > MAX_SNAPSHOT_BYTES) {
         return json({ error: "snapshot_too_large" }, 413);
@@ -227,20 +261,25 @@ export async function handleApiRequest(request, env) {
         return json({ error: "invalid_json" }, 400);
       }
 
-      if (!validateSnapshot(body.data)) {
+      const normalized = normalizeSnapshot(body.data);
+      if (!normalized) {
         return json({ error: "invalid_snapshot" }, 400);
       }
 
-      const expectedRevision = body.expectedRevision == null
-        ? null
-        : Math.max(0, Number.parseInt(body.expectedRevision, 10) || 0);
+      if (
+        body.expectedRevision != null
+        && (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0)
+      ) {
+        return json({ error: "invalid_revision" }, 400);
+      }
+      const expectedRevision = body.expectedRevision ?? null;
       const clientUpdatedAt = typeof body.clientUpdatedAt === "string"
         ? body.clientUpdatedAt.slice(0, 40)
         : null;
       const result = await saveSnapshot(
         env.DB,
         user,
-        body.data,
+        normalized,
         expectedRevision,
         clientUpdatedAt,
       );
@@ -252,12 +291,13 @@ export async function handleApiRequest(request, env) {
     }
 
     if (request.method === "DELETE") {
-      await env.DB.prepare("DELETE FROM fintrack_snapshots WHERE owner_email = ?")
-        .bind(user.email)
-        .run();
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM fintrack_snapshots_v2 WHERE owner_user_id = ?").bind(user.id),
+        env.DB.prepare("DELETE FROM fintrack_profiles_v2 WHERE user_id = ?").bind(user.id),
+      ]);
       return new Response(null, {
         status: 204,
-        headers: { "cache-control": "no-store" },
+        headers: { ...API_SECURITY_HEADERS, "cache-control": "no-store" },
       });
     }
 

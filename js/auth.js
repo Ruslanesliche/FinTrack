@@ -408,5 +408,4 @@ export function getAuthUser() {
 export async function signOut() {
   if (!client) return;
   await client.auth.signOut();
-  location.reload();
 }

@@ -21,7 +21,7 @@ It is an offline-first Progressive Web App written with semantic HTML, modern CS
 
 ## Live Demo
 
-Add your GitHub Pages URL here
+[Open FinTrack](https://fintrack-ruslan-toxeitov.rus-tokseitov.chatgpt.site)
 
 ## Features
 
@@ -50,7 +50,7 @@ The layout scales from iPhone SE through large iPhone models and expands to a si
 
 ## PWA and offline support
 
-The Web App Manifest defines standalone display, portrait orientation, app icons, maskable icons, shortcuts, and mobile/desktop screenshots. The Service Worker caches the app shell, removes old cache versions, stores fetched Chart.js and Lucide resources after the first load, and falls back to the cached application or `offline.html`.
+The Web App Manifest defines standalone display, portrait orientation, app icons, maskable icons, shortcuts, and mobile/desktop screenshots. Chart.js and Lucide are bundled into the same-origin application package. The Service Worker caches only the same-origin app shell, removes old cache versions, never caches Supabase or API responses, and falls back to the cached application or `offline.html`.
 
 Financial data remains usable offline after the first successful online load. Changes are queued locally and synchronized when the connection returns. API responses are never cached by the Service Worker.
 
@@ -84,6 +84,7 @@ fintrack/
 │   └── animations.css
 ├── js/
 │   ├── app.js
+│   ├── validation.js
 │   ├── router.js
 │   ├── storage.js
 │   ├── transactions.js
@@ -130,13 +131,14 @@ pnpm build
 
 ## Run locally
 
-Use the Live Server extension in VS Code and open `index.html`, or start any static HTTP server in the project folder. For example:
+Build the same-origin vendor bundle once, then start the included static development server:
 
 ```bash
-python -m http.server 8080
+pnpm build
+pnpm dev
 ```
 
-Then open `http://localhost:8080`.
+Then open `http://127.0.0.1:4173`.
 
 ## Publish to GitHub Pages
 
@@ -200,7 +202,7 @@ The production backend exposes same-origin endpoints:
 - `DELETE /api/sync` — removes the current user's cloud snapshot.
 - `GET /api/health` — checks database availability.
 
-Every database operation is scoped by the email from a Supabase access token validated by the backend. The browser never chooses or submits an owner identifier. Writes also require a matching same-origin request, payloads are size-limited and validated, and API responses use `no-store`.
+Every database operation is scoped by the immutable Supabase user UUID from an access token validated by the backend. Email is profile metadata only and is never used as an ownership key. The browser never chooses or submits an owner identifier. Writes also require a matching same-origin request, payloads are size-limited and deeply validated, and API responses use `no-store`. Deletion removes both the user's snapshot and its FinTrack profile row.
 
 LocalStorage remains the immediate offline data source. On launch, FinTrack compares the local synchronization metadata with the server revision, imports a newer server snapshot when safe, and sends local changes after a short debounce. Concurrent changes are reported as a conflict instead of silently overwriting another device.
 
@@ -221,13 +223,13 @@ FinTrack requires new passwords to be 12–72 characters, rejects personal infor
 
 The Backup screen exports a complete versioned JSON file named `fintrack-backup-YYYY-MM-DD.json` and operations as a UTF-8 BOM, semicolon-delimited CSV file compatible with Excel. Supported mobile browsers use the Web Share API; other browsers download the file.
 
-JSON imports are parsed as data, validated, and never executed. FinTrack creates a local pre-import backup before replacing current records.
+JSON imports are size-limited, parsed as data, deeply normalized against a strict schema, and never executed. Unsafe identifiers, excessive record counts and invalid field types are rejected. FinTrack creates a local pre-import backup before replacing current records. CSV cells that could be interpreted as spreadsheet formulas are neutralized.
 
 ## Limitations
 
 - Cloud synchronization and email registration are available on the configured Sites deployment; a plain static GitHub Pages deployment remains local-only.
 - Clearing browser data removes the offline copy, but authenticated users can restore the latest synchronized snapshot.
-- The project does not connect to banks, exchange rates, cloud storage, or external accounts.
+- The project does not connect to banks, exchange rates, or external financial accounts.
 - Budget and recurring-operation notices are shown when the app opens; system push notifications are not implemented.
 - Currency conversion is not performed between accounts.
 - Browser storage is not encrypted by FinTrack.
@@ -238,13 +240,15 @@ JSON imports are parsed as data, validated, and never executed. FinTrack creates
 
 Use JSON backups responsibly and do not publish files containing real financial records.
 
+The production worker sends a restrictive Content Security Policy, HSTS, anti-framing, MIME-sniffing, referrer, permissions, cross-origin isolation and no-store API headers. Authentication responses are never cached. Local financial data is cleared on sign-out to prevent the next browser user from seeing it. Automated tests cover token validation, origin enforcement, snapshot validation, password rules, email error privacy, CSV injection and import attacks; GitHub Actions and Dependabot run ongoing checks.
+
 ## Roadmap
 
 - Optional IndexedDB adapter for larger datasets
 - End-to-end encrypted, user-controlled sync
 - Custom reporting presets and additional accessible charts
 - Import from common bank CSV formats
-- Automated browser and unit test suite
+- Expanded end-to-end browser coverage
 - More account currencies with explicit exchange-rate handling
 
 ## Contributing

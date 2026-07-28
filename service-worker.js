@@ -1,32 +1,16 @@
-const CACHE_NAME = "fintrack-static-v1.2.7";
+const CACHE_NAME = "fintrack-static-v1.3.0";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./offline.html",
   "./manifest.json",
-  "./css/variables.css?v=1.2.7",
-  "./css/style.css?v=1.2.7",
-  "./css/components.css?v=1.2.7",
-  "./css/mobile.css?v=1.2.7",
-  "./css/animations.css?v=1.2.7",
-  "./app.bundle.js?v=1.2.7",
-  "./js/app.js?v=1.2.7",
-  "./js/auth.js",
-  "./js/email.js",
-  "./js/password.js",
-  "./js/router.js",
-  "./js/storage.js",
-  "./js/transactions.js",
-  "./js/categories.js",
-  "./js/budgets.js",
-  "./js/goals.js",
-  "./js/debts.js",
-  "./js/analytics.js",
-  "./js/settings.js",
-  "./js/sync.js",
-  "./js/backup.js",
-  "./js/notifications.js",
-  "./js/utils.js",
+  "./css/variables.css?v=1.3.0",
+  "./css/style.css?v=1.3.0",
+  "./css/components.css?v=1.3.0",
+  "./css/mobile.css?v=1.3.0",
+  "./css/animations.css?v=1.3.0",
+  "./assets/vendor.bundle.js?v=1.3.0",
+  "./app.bundle.js?v=1.3.0",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
   "./assets/icons/apple-touch-icon.png",
@@ -52,6 +36,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(fetch(event.request));
     return;

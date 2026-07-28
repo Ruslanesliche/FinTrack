@@ -1,4 +1,4 @@
-import { exportAll, importAll, resetApplication, validateData } from "./storage.js";
+import { bindStorageToUser, exportAll, importAll, validateData } from "./storage.js";
 import { getAccessToken } from "./auth.js";
 
 const META_KEY = "fintrack_sync_meta";
@@ -149,19 +149,8 @@ export async function initializeCloudSync() {
   try {
     const session = await request("/api/session");
     state.user = session.user;
-    const knownOwner = readMeta().ownerEmail;
-    if (knownOwner && knownOwner !== session.user.email) {
-      resetApplication();
-      writeMeta({
-        ownerEmail: session.user.email,
-        revision: 0,
-        lastSyncedAt: null,
-        localUpdatedAt: null,
-        serverUpdatedAt: null,
-      });
-    } else {
-      writeMeta({ ownerEmail: session.user.email });
-    }
+    bindStorageToUser(session.user.id);
+    writeMeta({ ownerUserId: session.user.id, ownerEmail: undefined });
     const remote = await request("/api/sync");
     const local = exportAll();
     const meta = readMeta();

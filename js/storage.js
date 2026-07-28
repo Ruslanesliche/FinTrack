@@ -1,5 +1,6 @@
 import { DEFAULT_CATEGORIES } from "./categories.js";
 import { generateId, todayISO } from "./utils.js";
+import { normalizeSnapshot, validateSnapshotData } from "./validation.js";
 
 export const STORAGE_KEYS = {
   settings: "fintrack_settings",
@@ -15,6 +16,7 @@ export const STORAGE_KEYS = {
 };
 
 const SYNC_META_KEY = "fintrack_sync_meta";
+const STORAGE_OWNER_KEY = "fintrack_storage_owner";
 const ARRAY_STORES = ["accounts", "transactions", "categories", "budgets", "goals", "debts", "recurring", "backups"];
 
 const defaults = {
@@ -133,11 +135,14 @@ export function saveAppState(patch) {
 }
 
 export function validateData(data) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
-  const required = ["settings", "accounts", "transactions", "categories", "budgets", "goals", "debts", "recurring"];
-  return required.every((key) => key === "settings"
-    ? data[key] && typeof data[key] === "object" && !Array.isArray(data[key])
-    : Array.isArray(data[key]));
+  return validateSnapshotData(data);
+}
+
+export function bindStorageToUser(userId) {
+  if (!userId) return;
+  const previousOwner = localStorage.getItem(STORAGE_OWNER_KEY);
+  if (previousOwner && previousOwner !== userId) resetApplication();
+  localStorage.setItem(STORAGE_OWNER_KEY, userId);
 }
 
 export function exportAll() {
@@ -152,11 +157,12 @@ export function exportAll() {
 }
 
 export function importAll(data) {
-  if (!validateData(data)) throw new Error("Файл не похож на резервную копию FinTrack.");
+  const normalized = normalizeSnapshot(data);
+  if (!normalized) throw new Error("Файл не похож на безопасную резервную копию FinTrack.");
   write("backups", [{ id: generateId("backup"), createdAt: new Date().toISOString(), data: exportAll() }, ...getAll("backups")].slice(0, 5));
-  write("settings", { ...defaults.settings, ...data.settings });
-  write("appState", { ...defaults.appState, ...(data.appState || {}) });
-  for (const store of ARRAY_STORES.filter((name) => name !== "backups")) write(store, structuredClone(data[store] || []));
+  write("settings", { ...defaults.settings, ...normalized.settings });
+  write("appState", { ...defaults.appState, ...(normalized.appState || {}) });
+  for (const store of ARRAY_STORES.filter((name) => name !== "backups")) write(store, structuredClone(normalized[store] || []));
   return true;
 }
 
@@ -274,6 +280,7 @@ export function initializeEmptyData({ initialBalance = 0, currency = "KZT" } = {
 export function resetApplication() {
   Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
   localStorage.removeItem(SYNC_META_KEY);
+  localStorage.removeItem(STORAGE_OWNER_KEY);
 }
 
 export { read, write };

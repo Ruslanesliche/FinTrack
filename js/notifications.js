@@ -1,7 +1,13 @@
 let previousFocus = null;
 
 export function refreshIcons(root = document) {
-  if (globalThis.lucide?.createIcons) globalThis.lucide.createIcons({ attrs: { "aria-hidden": "true", "stroke-width": 1.8 }, root });
+  if (globalThis.lucide?.createIcons) {
+    globalThis.lucide.createIcons({
+      icons: globalThis.lucide.icons,
+      attrs: { "aria-hidden": "true", "stroke-width": 1.8 },
+      root,
+    });
+  }
 }
 
 export function showToast(message, options = {}) {
